@@ -1,0 +1,212 @@
+---
+title: Built-in Types
+---
+
+import { Table } from '@/components/table';
+
+## Boolean
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Alias' },
+    { header: 'Size' },
+  ]}
+  rows={[
+    {
+      cells: [<code>bool</code>, <code>i1</code>, '1 byte'],
+      details: <p>Represents a boolean value. <code>true</code> or <code>false</code>.</p>,
+    },
+  ]}
+/>
+
+## Integers
+
+> `i(n)` and `u(n)` are valid for any bit width `n`. You can create integers of arbitrary size, e.g. `i7`, `u3`, `i256`.
+
+### Signed
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Size' },
+    { header: 'Range' },
+  ]}
+  rows={[
+    { cells: [<code>i8</code>, '1 byte', <span title="-128 to 127">-128 to 127</span>] },
+    { cells: [<code>i16</code>, '2 bytes', <span title="-32,768 to 32,767">-32K to 32K</span>] },
+    { cells: [<code>i32</code>, '4 bytes', <span title="-2,147,483,648 to 2,147,483,647">-2B to 2B</span>] },
+    { cells: [<code>i64</code>, '8 bytes', <span title="-9,223,372,036,854,775,808 to 9,223,372,036,854,775,807">-9.2E to 9.2E</span>] },
+    { cells: [<code>i128</code>, '16 bytes', <span title="-170,141,183,460,469,231,731,687,303,715,884,105,728 to 170,141,183,460,469,231,731,687,303,715,884,105,727">-170U to 170U</span>] },
+  ]}
+/>
+
+### Unsigned
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Size' },
+    { header: 'Range' },
+  ]}
+  rows={[
+    { cells: [<code>u8</code>, '1 byte', <span title="0 to 255">0 to 255</span>] },
+    { cells: [<code>u16</code>, '2 bytes', <span title="0 to 65,535">0 to 65K</span>] },
+    { cells: [<code>u32</code>, '4 bytes', <span title="0 to 4,294,967,295">0 to 4B</span>] },
+    { cells: [<code>u64</code>, '8 bytes', <span title="0 to 18,446,744,073,709,551,615">0 to 18E</span>] },
+    { cells: [<code>u128</code>, '16 bytes', <span title="0 to 340,282,366,920,938,463,463,374,607,431,768,211,455">0 to 340U</span>] },
+  ]}
+/>
+
+### Size Types
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Alias' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>size</code>, <code>u32</code>, 'Platform size type'] },
+    { cells: [<code>size_long</code>, <code>u64</code>, '64-bit size type'] },
+    { cells: [<code>c_result</code>, <code>i32</code>, 'C interop result type'] },
+  ]}
+/>
+
+## Void
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    {
+      cells: [<code>void</code>, 'Represents the absence of a value'],
+      details: <p>Used as a return type for functions that do not return a value.</p>,
+    },
+  ]}
+/>
+
+## Strings
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    {
+      cells: [<code>str</code>, 'String slice (borrowed)'],
+      details: <>
+        <p>A reference to a sequence of characters. Contains a pointer to the data and a length.</p>
+        <pre><code>{`struct str {\n    i8* data;\n    size len;\n}`}</code></pre>
+        <p><strong>Methods:</strong></p>
+        <ul>
+          <li><code>is_empty() -&gt; bool</code> — returns <code>true</code> if length is 0</li>
+          <li><code>ptr() -&gt; i8*</code> — returns raw pointer to the data</li>
+        </ul>
+      </>,
+    },
+    {
+      cells: [<code>string</code>, 'Owned string (heap-allocated)'],
+      details: <>
+        <p>A growable, heap-allocated string. Contains a pointer, length, and capacity.</p>
+        <pre><code>{`struct string {\n    i8* data;\n    size len;\n    size capacity;\n}`}</code></pre>
+        <p><strong>Methods:</strong></p>
+        <ul>
+          <li><code>is_empty() -&gt; bool</code> — returns <code>true</code> if length is 0</li>
+          <li><code>ptr() -&gt; i8*</code> — returns raw pointer to the data</li>
+        </ul>
+      </>,
+    },
+  ]}
+/>
+
+## Arrays
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    {
+      cells: [<code>{'arr<T>'}</code>, 'Array slice'],
+      details: <>
+        <p>A reference to a contiguous sequence of elements of type <code>T</code>. Contains a pointer and a length.</p>
+        <pre><code>{`struct arr<T> {\n    T* data;\n    size len;\n}`}</code></pre>
+        <p><strong>Methods:</strong></p>
+        <ul>
+          <li><code>is_empty() -&gt; bool</code> — returns <code>true</code> if length is 0</li>
+          <li><code>ptr() -&gt; i8*</code> — returns raw pointer to the data</li>
+        </ul>
+      </>,
+    },
+  ]}
+/>
+
+## Pointers
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    {
+      cells: [<code>T*</code>, 'Pointer to T'],
+      details: <p>A raw pointer to a value of type <code>T</code>. Holds the memory address where the value is stored.</p>,
+    },
+  ]}
+/>
+
+## Enums
+
+### optional{'<T>'}
+
+<Table
+  columns={[
+    { header: 'Variant', width: 'w-1/4' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    {
+      cells: [<code>Empty()</code>, 'No value present'],
+    },
+    {
+      cells: [<code>Value(T)</code>, 'Contains a value of type T'],
+    },
+  ]}
+/>
+
+```djinn
+enum optional<T> {
+    Empty(),
+    Value(T)
+}
+```
+
+### result{'<T, E>'}
+
+<Table
+  columns={[
+    { header: 'Variant', width: 'w-1/4' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    {
+      cells: [<code>Ok(T)</code>, 'Success, contains the result value'],
+    },
+    {
+      cells: [<code>Error(E)</code>, 'Failure, contains the error value'],
+    },
+  ]}
+/>
+
+```djinn
+enum result<T, E> {
+    Ok(T),
+    Error(E)
+}
+```

@@ -1,0 +1,38 @@
+---
+title: Interfaces
+---
+
+import { Table } from '@/components/table';
+
+## Defined Types
+
+Interfaces define contracts which a `struct` requires to implement. To define interface, use
+the keyword `interface` preceding it name.
+
+```djinn
+interface User {
+    string name;
+    i32 age;
+}
+```
+Interfaces are allowed to collide with struct names. In this following example, `interface User` 
+will not be anbugious with `struct User`. The compiler will use `interface` declaration for parameters,
+methods return values and anywhere needs instead the `struct` implementation
+
+```djinn
+interface User {
+    string name;
+    i32 age;
+
+    bool isOnline();
+}
+
+struct User : User{
+    string name;
+    i32 age;
+
+    bool isOnline(){
+      return true;
+    }
+}
+```

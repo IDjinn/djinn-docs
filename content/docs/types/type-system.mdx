@@ -1,0 +1,83 @@
+---
+title: Type System
+---
+
+import { Table } from '@/components/table';
+
+export const defined = '/docs/std/built-in-types';
+
+## Built-in Types
+
+<Card>
+Check [types](/docs/std/built-in-types) details
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    {
+      cells: [<a href={`${defined}#integers`}><code>{'i(N)'}</code></a>, 'Integer\'s type'],
+    },
+    {
+      cells: [<a href={`${defined}#unsigned-integers`}><code>{'u(N)'}</code></a>, 'Unsigned integer\'s type'],
+    },
+    {
+      cells: [<a href={`${defined}#booleans`}><code>{'bool'}</code></a>, 'Boolean type'],
+    },
+    {
+      cells: [<a href={`${defined}#arrays`}><code>{'arr<T>'}</code></a>, 'Array slice'],
+    },
+    {
+      cells: [<a href={`${defined}#strings`}><code>{'str'}</code></a>, 'String slice'],
+    },
+    {
+      cells: [<a href={`${defined}#pointers`}><code>{'T*'}</code></a>, 'Pointer type'],
+    },
+  ]}
+/>
+</Card>
+
+## Defined Types
+
+You can define your own types using keyword `struct`
+
+```djinn
+struct User {
+    string name;
+    i32 age;
+    // ...
+}
+```
+
+All fields can be described with `modifiers`, then `type` and finally their `name` 
+
+## Generic Types
+
+A generic struct can have any number of generic types, they must be compile-time known. When compiled, it creates each type its own
+morphilized struct
+
+```djinn
+struct Repository<TEntity, TKey> {
+    DatabaseConnection connection;
+
+    public TEntity getById(TKey id) { 
+        //.. do work 
+    }
+}
+```
+
+## Transparent Types
+
+Any transparent time is just a compile "alias" to type `x`. You can then implement own methods & fields or just use them to assure type safety. \
+\
+Good example of their use is binding with C/C++ libraries
+
+```djinn
+struct c_result : i32;
+struct bool : i1;
+```
+
+The compiler will diferenciate `c_result` than `i32`, with own `equals` overloading and etc, but when generate the code will be lowered to desired type. 
+Without any fields, doesnt have any aditional cost

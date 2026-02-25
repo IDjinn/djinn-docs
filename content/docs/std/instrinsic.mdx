@@ -1,0 +1,36 @@
+---
+title: Intrinsics
+---
+
+import { Table } from '@/components/table';
+
+## Intrinsics
+
+Intrinsics is any special case which compiler may override or re-write its implementation
+based on what is known at that build process. The porpuse is make possible some sort of flexibility
+when doing compilation through source code
+
+
+export const intrinsics = {
+  'sizeof(T)': 'Size (in bytes) of type T at compile time.',
+  'alignof(size)': 'Specifies or queries alignment requirement in bytes (power-of-two multiple).',
+  'bitcast()': 'Reinterprets the underlying bits of a value as another type of the same size without changing the data.',
+  'trap()': 'Emits an unrecoverable runtime trap instruction that immediately aborts execution.',
+  'debugtrap()': 'Emits a breakpoint trap intended for debuggers; stops execution only under debugging.',
+  'unreachable()': 'Marks code path as impossible; reaching it results in undefined behavior and enables aggressive optimizations.',
+  'expect(value, expected)': 'Provides branch prediction hint by indicating the expected value of a condition.',
+  'likely(bool)': 'Marks a branch as likely to be taken (branch prediction hint).',
+  'unlikely(bool)': 'Marks a branch as unlikely to be taken (branch prediction hint).',
+  'typeof(Expression)': 'Returns the type of an expression at compile time without evaluating it.',
+}
+
+
+<Table
+  columns={[
+    { header: 'Name', width: 'w-1/4' },
+    { header: 'Description' },
+  ]}
+  rows={Object.entries(intrinsics).map(([name, desc]) => ({
+    cells: [<code>{name}</code>, desc],
+  }))}
+/>
