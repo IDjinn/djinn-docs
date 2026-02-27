@@ -1,0 +1,73 @@
+---
+title: Functions
+---
+
+## Declaration
+
+Functions are declared with a return type, name, parameters, and body:
+
+```djinn
+i32 sum(i32 a, i32 b) {
+    return a + b;
+}
+```
+
+The return type comes before the function name. Use `void` for functions that don't return a value:
+
+```djinn
+void greet() {
+    printf("hello!\n");
+}
+```
+
+## Parameters
+
+Parameters are declared with their type followed by the name:
+
+```djinn
+i32 multiply(i32 x, i32 y) {
+    return x * y;
+}
+```
+
+Variadic parameters are supported in `extern` declarations:
+
+```djinn
+extern "C" {
+    i32 printf(i8* format, ...);
+}
+```
+
+## Return Values
+
+Use `return` to exit a function with a value. Multiple return paths are allowed:
+
+```djinn
+i32 absolute(i32 x) {
+    if (x < 0) {
+        return 0 - x;
+    }
+    return x;
+}
+```
+
+## Entry Point
+
+Every program needs a `main` function. It can return `i32` or `void`:
+
+```djinn
+i32 main() {
+    return 0;
+}
+```
+
+`main` can also be `async`:
+
+```djinn
+async i32 main() {
+    i32 val = await compute();
+    return val;
+}
+```
+
+See [Async/Await](/docs/async/async-await) for details.

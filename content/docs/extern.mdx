@@ -1,0 +1,72 @@
+---
+title: Extern & FFI
+---
+
+## Extern Functions
+
+Use `extern "C"` to declare C functions that can be called from Djinn:
+
+```djinn
+extern "C" {
+    i32 printf(i8* format, ...);
+    i32 puts(i8* s);
+    void* malloc(size_long size);
+    void free(void* ptr);
+}
+```
+
+These are linked at compile time against the C standard library.
+
+## Calling Extern Functions
+
+Extern functions are called like regular Djinn functions:
+
+```djinn
+extern "C" {
+    i32 printf(i8* format, ...);
+}
+
+i32 main() {
+    printf("Hello %s! Answer: %d\n", "World", 42);
+    return 0;
+}
+```
+
+## Variadic Functions
+
+C variadic functions (like `printf`) are supported with `...`:
+
+```djinn
+extern "C" {
+    i32 printf(i8* format, ...);
+    i32 sprintf(i8* buf, i8* format, ...);
+}
+```
+
+## Math Library
+
+C math functions are available through extern declarations:
+
+```djinn
+extern "C" {
+    f64 sqrt(f64 x);
+    f64 pow(f64 base, f64 exp);
+    f32 sqrtf(f32 x);
+}
+```
+
+## Standard Library
+
+The standard library wraps common extern declarations. Import them directly:
+
+```djinn
+import std::types;
+import std::libc;
+
+i32 main() {
+    printf("Using std::libc\n");
+    return 0;
+}
+```
+
+See [Built-in Types](/docs/std/built-in-types) for the full standard library reference.

@@ -1,0 +1,69 @@
+---
+title: Variables
+---
+
+## Declaration
+
+Variables are declared with their type, name, and an optional initializer:
+
+```djinn
+i32 x = 10;
+i64 big = 9999999;
+i8* message = "hello";
+```
+
+## Immutability by Default
+
+All variables are **immutable** by default. Attempting to reassign will produce a compile error:
+
+```djinn
+i32 x = 10;
+x = 20;  // Error: cannot reassign immutable variable
+```
+
+## Mutable Variables
+
+Use the `mut` keyword after the variable name to allow reassignment:
+
+```djinn
+i32 mut counter = 0;
+counter = counter + 1;  // OK
+```
+
+Mutable parameters work the same way:
+
+```djinn
+void increment(i32 x mut) {
+    x = x + 1;
+}
+```
+
+## Type Inference
+
+Use `auto` to let the compiler infer the type from the initializer:
+
+```djinn
+auto x = 42;           // inferred as i32
+auto p = Point(1, 2);  // inferred as Point
+```
+
+`auto` works with `mut`:
+
+```djinn
+auto mut result = 0;
+result = compute();
+```
+
+## Scope
+
+Variables are block-scoped. Inner blocks can shadow outer variables:
+
+```djinn
+i32 main() {
+    i32 x = 10;
+    {
+        i32 x = 20;  // shadows outer x
+    }
+    return x;  // 10
+}
+```

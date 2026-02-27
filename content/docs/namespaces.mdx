@@ -1,0 +1,86 @@
+---
+title: Namespaces & Imports
+---
+
+## Namespaces
+
+Namespaces organize code into logical groups. Declare with `namespace`:
+
+### File-scoped
+
+A semicolon makes the namespace apply to the entire file:
+
+```djinn
+namespace myapp;
+
+i32 helper() {
+    return 42;
+}
+```
+
+### Block-scoped
+
+Use braces to contain declarations:
+
+```djinn
+namespace geom {
+    struct Vector {
+        f32 x;
+        f32 y;
+    }
+}
+```
+
+### Qualified Names
+
+Use `::` for nested namespaces:
+
+```djinn
+namespace std::types;
+namespace std::io;
+namespace myapp::utils;
+```
+
+### Nested Namespaces
+
+```djinn
+namespace std {
+    namespace io {
+        // declarations
+    }
+}
+```
+
+## Imports
+
+Use `import` to bring declarations from other files/namespaces into scope:
+
+```djinn
+import std::types;
+import std::libc;
+import myapp::utils;
+```
+
+### Standard Library Imports
+
+```djinn
+import std::types;        // bool, size, optional, result, string
+import std::libc;         // printf, malloc, free, strlen
+import std::collections;  // array<T>, map<K,V>
+```
+
+## Qualified Access
+
+Use `::` to call functions from other namespaces:
+
+```djinn
+namespace math {
+    i32 add(i32 a, i32 b) {
+        return a + b;
+    }
+}
+
+i32 main() {
+    return math::add(1, 2);  // 3
+}
+```

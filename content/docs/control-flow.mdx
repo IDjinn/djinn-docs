@@ -1,0 +1,103 @@
+---
+title: Control Flow
+---
+
+## If / Else
+
+Conditional branching with `if`, `else if`, and `else`:
+
+```djinn
+i32 classify(i32 x) {
+    if (x > 10) {
+        return 1;
+    } else if (x > 3) {
+        return 2;
+    } else {
+        return 3;
+    }
+}
+```
+
+Conditions must be in parentheses. Bodies require braces.
+
+## For Loop
+
+C-style for loops with init, condition, and increment:
+
+```djinn
+i32 main() {
+    i32 mut sum = 0;
+    for (i32 mut i = 0; i < 10; i = i + 1) {
+        sum = sum + i;
+    }
+    return sum;  // 45
+}
+```
+
+## While Loop
+
+Repeats while the condition is true:
+
+```djinn
+i32 main() {
+    i32 mut x = 1;
+    while (x < 100) {
+        x = x * 2;
+    }
+    return x;  // 128
+}
+```
+
+## Do-While Loop
+
+Executes the body at least once, then checks the condition:
+
+```djinn
+i32 main() {
+    i32 mut x = 10;
+    do {
+        x = x + 1;
+    } while (x < 5);
+    return x;  // 11 (body runs once even though 10 >= 5)
+}
+```
+
+## Switch
+
+Match a value against multiple cases:
+
+```djinn
+i32 main() {
+    i32 x = 2;
+    switch (x) {
+        case 1:
+            return 10;
+        case 2:
+            return 20;
+        case 3:
+            return 30;
+        default:
+            return 0;
+    }
+}
+```
+
+## Break and Continue
+
+`break` exits the current loop. `continue` skips to the next iteration:
+
+```djinn
+i32 main() {
+    i32 mut sum = 0;
+    for (i32 mut i = 0; i < 10; i = i + 1) {
+        if (i == 5) {
+            continue;  // skip 5
+        }
+        if (i == 8) {
+            break;     // stop at 8
+        }
+        sum = sum + i;
+    }
+    return sum;  // 0+1+2+3+4+6+7 = 23
+}
+```

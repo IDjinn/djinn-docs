@@ -1,0 +1,76 @@
+---
+title: Enums
+---
+
+## Simple Enums
+
+Enums define a set of named variants:
+
+```djinn
+enum Color {
+    Red(),
+    Green(),
+    Blue()
+}
+
+i32 main() {
+    Color c = Color::Red();
+    return 0;
+}
+```
+
+Variants are constructed with the `EnumName::Variant()` syntax.
+
+## Variants with Payload
+
+Variants can carry data (tagged unions / algebraic data types):
+
+```djinn
+enum Message {
+    Empty(),
+    Text(i8*),
+    Number(i64),
+    Pair(i32, i32)
+}
+
+i32 main() {
+    Message m = Message::Number(42);
+    return 0;
+}
+```
+
+## Generic Enums
+
+Enums can be parameterized with generic types:
+
+### optional{'<T>'}
+
+```djinn
+enum optional<T> {
+    Empty(),
+    Value(T)
+}
+
+i32 main() {
+    optional<i32> some = optional<i32>::Value(42);
+    optional<i32> none = optional<i32>::Empty();
+    return 0;
+}
+```
+
+### result{'<T, E>'}
+
+```djinn
+enum result<T, E> {
+    Ok(T),
+    Error(E)
+}
+
+i32 main() {
+    result<i32, i8*> success = result<i32, i8*>::Ok(100);
+    result<i32, i8*> failure = result<i32, i8*>::Error("not found");
+    return 0;
+}
+```
+
+Both `optional` and `result` are provided in the standard library via `import std::types`.

@@ -1,0 +1,91 @@
+---
+title: Generics
+---
+
+## Generic Structs
+
+Structs can be parameterized with one or more type parameters:
+
+```djinn
+struct Box<T> {
+    T value;
+
+    Box(T v) {
+        this.value = v;
+    }
+
+    public T get() {
+        return this.value;
+    }
+}
+
+i32 main() {
+    Box<i32> b = Box<i32>(42);
+    return b.get();  // 42
+}
+```
+
+### Multiple Type Parameters
+
+```djinn
+struct Pair<K, V> {
+    K key;
+    V value;
+}
+
+i32 main() {
+    Pair<i32, i32> p = { .key = 42, .value = 100 };
+    return p.key + p.value;  // 142
+}
+```
+
+## Monomorphization
+
+Generics are monomorphized at compile time. Each unique instantiation (e.g., `Box<i32>`, `Box<i64>`) generates a separate struct and method set. There is no runtime cost.
+
+## Generic Enums
+
+Enums also support generics:
+
+```djinn
+enum optional<T> {
+    Empty(),
+    Value(T)
+}
+
+optional<i32> x = optional<i32>::Value(42);
+```
+
+See [Enums](/docs/types/enums) for more details.
+
+## Generic Constraints
+
+Type parameters can be constrained with interfaces using `where`:
+
+```djinn
+interface IValue {
+    i32 getValue();
+}
+
+struct Container<T> where T : IValue {
+    T item;
+}
+```
+
+Only types that implement `IValue` can be used as `T`:
+
+```djinn
+struct MyItem : IValue {
+    i32 data;
+
+    i32 getValue() {
+        return this.data;
+    }
+}
+
+i32 main() {
+    MyItem item = { .data = 42 };
+    Container<MyItem> c = { .item = item };
+    return 0;
+}
+```

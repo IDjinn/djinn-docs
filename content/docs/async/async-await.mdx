@@ -1,0 +1,204 @@
+---
+title: Async / Await
+---
+
+
+import {Table} from '@/components/table';
+
+## Overview
+
+Djinn supports `async` functions and `await` expressions for writing asynchronous code. Under the hood, async functions compile to LLVM coroutines that are
+fully optimized by the backend — in many cases resulting in **zero overhead** after inlining and coroutine elision.
+
+```djinn
+async i32 compute(i32 x) {
+    return x * 2 + 1;
+}
+
+async i32 main() {
+    i32 result = await compute(10);
+    printf("result: %d\n", result);  // result: 21
+    return 0;
+}
+```
+
+## Async Functions
+
+Any function can be marked `async` by adding the keyword before the return type. An async function returns a **coroutine handle** (`ptr`) instead of its declared return type.
+
+```djinn
+async i32 fetch_value() {
+    return 42;
+}
+```
+
+The caller uses `await` to obtain the actual return value.
+
+### Syntax
+
+```
+async <return_type> <name>(<params>) { <body> }
+```
+
+### Rules
+
+<Table
+    columns={[
+        {header: 'Rule', width: 'w-1/3'},
+        {header: 'Description'},
+    ]}
+    rows={[
+        {cells: ['Return type', 'Any type (i32, i64, void, structs, etc.). The actual LLVM return type becomes ptr (coroutine handle).']},
+        {cells: ['Parameters', 'Same as regular functions. All parameter types are supported.']},
+        {cells: ['Body', 'Can contain any statement including other await expressions.']},
+        {cells: ['Async main', 'Supported. The compiler generates a wrapper main() that awaits the async entry point.']},
+    ]}
+/>
+
+## Await Expressions
+
+The `await` keyword suspends the caller until the async function completes, then extracts the return value from the coroutine promise.
+
+```djinn
+i32 result = await some_async_function(args);
+```
+
+### Where you can use await
+
+- Inside `async` functions (chained coroutines)
+- Inside regular `main()` or any function (the compiler generates an await loop)
+
+### Multiple awaits
+
+You can await multiple async calls sequentially:
+
+```djinn
+async i32 add(i32 a, i32 b) {
+    return a + b;
+}
+
+async i32 square(i32 x) {
+    return x * x;
+}
+
+async i32 main() {
+    i32 a = await square(3);    // 9
+    i32 b = await square(4);    // 16
+    i32 sum = await add(a, b);  // 25
+    return sum;
+}
+```
+
+## Chaining
+
+Async functions can call and await other async functions, creating chains of coroutines:
+
+```djinn
+async i32 step1(i32 x) {
+    return x + 10;
+}
+
+async i32 step2(i32 x) {
+    i32 val = await step1(x);
+    return val * 2;
+}
+
+async i32 pipeline(i32 x) {
+    i32 val = await step2(x);
+    return val + 5;
+}
+
+// pipeline(5) -> step2(5) -> step1(5) = 15 -> 30 -> 35
+```
+
+## Async Main
+
+When `main` is declared as `async`, the compiler automatically generates:
+
+1. `__djinn_async_main()` — the actual coroutine with your code
+2. `main()` — a synchronous wrapper that calls and awaits the async entry point
+
+```djinn
+// You write:
+async i32 main() {
+    i32 val = await compute(10);
+    return val;
+}
+
+// Compiler generates (conceptual):
+// ptr __djinn_async_main() { ... coroutine body ... }
+// i32 main() { hdl = __djinn_async_main(); await hdl; return result; }
+```
+
+## Performance
+
+Djinn's async implementation uses LLVM's native coroutine intrinsics (`coro.id`, `coro.begin`, `coro.suspend`, etc.). At optimization level `-O2`, the LLVM backend applies:
+
+<Table
+    columns={[
+        {header: 'Pass', width: 'w-1/3'},
+        {header: 'Effect'},
+    ]}
+    rows={[
+        {cells: ['CoroSplit', 'Splits each async function into resume/destroy/cleanup sub-functions.']},
+        {cells: ['CoroElide', 'Eliminates heap allocation when the coroutine lifetime is contained in the caller (stack promotion).']},
+        {cells: ['Inlining', 'Small split functions are inlined into the caller.']},
+        {cells: ['DCE / Constant Folding', 'Dead code and constant values are propagated, often reducing async calls to direct computation.']},
+    ]}
+/>
+
+For simple "compute and return" async functions where the result is immediately awaited, the optimizer can eliminate **all** coroutine overhead — no malloc, no frame, no indirect calls.
+
+## Implementation Details
+
+Each `async` function generates the following LLVM IR structure:
+
+```
+entry:
+  %promise = alloca <return_type>
+  %id      = call token @llvm.coro.id(...)
+  %alloc   = call i1 @llvm.coro.alloc(token %id)
+  br i1 %alloc, label %coro.alloc, label %coro.begin
+
+coro.alloc:
+  %size = call i64 @llvm.coro.size.i64()
+  %mem  = call ptr @malloc(i64 %size)
+  br label %coro.begin
+
+coro.begin:
+  %hdl = call ptr @llvm.coro.begin(token %id, ptr %mem)
+  ; ... function body ...
+  store <result>, ptr %promise
+  br label %coro.final
+
+coro.final:
+  call i8 @llvm.coro.suspend(token none, i1 true)
+  ; switch → cleanup or trap
+
+coro.cleanup:
+  %free.mem = call ptr @llvm.coro.free(token %id, ptr %hdl)
+  call void @free(ptr %free.mem)
+
+coro.suspend:
+  call void @llvm.coro.end(ptr %hdl, ...)
+  ret ptr %hdl
+```
+
+The `await` expression generates:
+
+```
+await.loop:
+  %done = call i1 @llvm.coro.done(ptr %handle)
+  br i1 %done, label %await.ready, label %await.resume
+
+await.resume:
+  call void @llvm.coro.resume(ptr %handle)
+  br label %await.loop
+
+await.ready:
+  %promise = call ptr @llvm.coro.promise(ptr %handle, ...)
+  %result  = load <type>, ptr %promise
+  call void @llvm.coro.destroy(ptr %handle)
+```
+
+Functions are marked with the `presplitcoroutine` attribute so the LLVM coroutine passes can process them.

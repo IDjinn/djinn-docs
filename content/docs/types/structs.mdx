@@ -1,0 +1,126 @@
+---
+title: Structs
+---
+
+## Declaration
+
+Structs group related data into a single type:
+
+```djinn
+struct Point {
+    i32 x;
+    i32 y;
+}
+```
+
+## Initialization
+
+### Brace Initializer (positional)
+
+```djinn
+Point p = { 10, 20 };
+```
+
+### Designated Initializer
+
+```djinn
+Point p = { .x = 10, .y = 20 };
+```
+
+### Constructor
+
+```djinn
+struct Point {
+    i32 x;
+    i32 y;
+
+    Point(i32 x, i32 y) {
+        this.x = x;
+        this.y = y;
+    }
+}
+
+Point p = Point(10, 20);
+```
+
+## Field Access
+
+Access fields with the dot operator:
+
+```djinn
+i32 main() {
+    Point p = { .x = 5, .y = 15 };
+    return p.x + p.y;  // 20
+}
+```
+
+## Methods
+
+Methods are defined inside the struct body. They access fields through `this`:
+
+```djinn
+struct Rectangle {
+    i32 width;
+    i32 height;
+
+    i32 area() {
+        return this.width * this.height;
+    }
+
+    // Expression body (arrow syntax)
+    i32 perimeter() => (this.width + this.height) * 2;
+}
+```
+
+## Static Methods
+
+Static methods don't have access to `this`:
+
+```djinn
+struct Math {
+    public static i32 max(i32 a, i32 b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+}
+
+i32 main() {
+    return Math.max(10, 20);  // 20
+}
+```
+
+## Heap Allocation
+
+Use `new` to allocate on the heap:
+
+```djinn
+User me = new User(1, 25);
+```
+
+## Transparent Types
+
+A struct that inherits from a primitive type creates a zero-cost wrapper (newtype pattern):
+
+```djinn
+struct size : u32;
+struct c_result : i32;
+struct bool : i1;
+```
+
+The compiler differentiates `size` from `u32` for type safety, but the generated code is identical.
+
+## Properties
+
+Structs can define computed properties with `get` and `set`:
+
+```djinn
+struct Temperature {
+    f64 celsius;
+
+    f64 fahrenheit {
+        get => this.celsius * 1.8 + 32.0;
+    }
+}
+```
