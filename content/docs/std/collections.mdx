@@ -2,13 +2,96 @@
 title: Collections
 ---
 
-import { Table } from '@/components/table';
+## Array Slices
 
-## Collections
-
-### Array
-
+Array slices (`T[]`) are a view into contiguous data with a pointer and length:
 
 ```djinn
-
+i32 main() {
+    i32[] nums = [10, 20, 30];
+    return nums.length;  // 3
+}
 ```
+
+### Index Access
+
+```djinn
+i32 main() {
+    i32[] nums = [10, 20, 30];
+    return nums[1];  // 20
+}
+```
+
+### Index Write
+
+```djinn
+i32 main() {
+    i32[] nums = [1, 2, 3];
+    nums[0] = 99;
+    return nums[0];  // 99
+}
+```
+
+### Iteration
+
+```djinn
+i32 main() {
+    i32[] nums = [10, 20, 30, 40];
+    mut i32 sum = 0;
+    for (mut u32 i = 0; i < nums.length; i = i + 1u) {
+        sum = sum + nums[i];
+    }
+    return sum;  // 100
+}
+```
+
+### Typed Array Literals
+
+You can explicitly specify the element type:
+
+```djinn
+i32[] nums = i32[10, 20, 30];
+```
+
+## Fixed-Size Arrays
+
+Use `type[length]` to allocate a fixed-size array on the stack. Returns a pointer to the first element:
+
+```djinn
+i32 main() {
+    i8* buf = i8[64];      // 64 bytes on the stack
+    buf[0] = 42;
+    return (i32)buf[0];    // 42
+}
+```
+
+The length can be a compile-time constant:
+
+```djinn
+constexpr i32 SIZE = 8192;
+
+i32 main() {
+    i8* buffer = i8[SIZE];
+    buffer[0] = 1;
+    buffer[8191] = 99;
+    return (i32)buffer[8191];  // 99
+}
+```
+
+Fixed-size arrays with integer types:
+
+```djinn
+i32 main() {
+    i32* data = i32[10];
+    for (mut i32 i = 0; i < 10; i = i + 1) {
+        data[i] = i * 10;
+    }
+    return data[3];  // 30
+}
+```
+
+### Stack vs Heap
+
+- `type[length]` always allocates on the **stack** (no malloc/free needed)
+- For heap allocation, use `new` with a constructor or `malloc` via extern
+- Inside `async` functions, the compiler automatically promotes stack allocations to the coroutine frame on the heap

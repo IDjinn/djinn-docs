@@ -71,3 +71,29 @@ async i32 main() {
 ```
 
 See [Async/Await](/docs/async/async-await) for details.
+
+## constexpr Functions
+
+A `constexpr` function can be evaluated at compile time when called with constant arguments, or at runtime otherwise:
+
+```djinn
+constexpr i32 square(i32 x) {
+    return x * x;
+}
+
+i32 main() {
+    return square(5);  // may be evaluated at compile time
+}
+```
+
+## consteval Functions
+
+A `consteval` function **must** be evaluated at compile time. Calling it with non-constant arguments is a compile error:
+
+```djinn
+consteval i32 hash_seed(i32 x) {
+    return x * 31 + 7;
+}
+```
+
+See [Compile-Time Evaluation](/docs/constexpr) for full details.

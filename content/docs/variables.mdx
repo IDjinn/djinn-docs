@@ -54,6 +54,24 @@ auto mut result = 0;
 result = compute();
 ```
 
+## Compile-Time Constants
+
+Use `constexpr` to declare variables evaluated entirely at compile time:
+
+```djinn
+constexpr i32 MAX_SIZE = 1024;
+constexpr i32 BUFFER = 4 * MAX_SIZE;
+```
+
+`constexpr` variables support arithmetic, comparison, logic, and references to other constants. They can be used anywhere a constant is expected, including fixed-size array lengths:
+
+```djinn
+constexpr i32 SIZE = 64;
+i8* buf = i8[SIZE];  // stack-allocated array of 64 bytes
+```
+
+See [Compile-Time Evaluation](/docs/constexpr) for full details on `constexpr` and `consteval`.
+
 ## Scope
 
 Variables are block-scoped. Inner blocks can shadow outer variables:

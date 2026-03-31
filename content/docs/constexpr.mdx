@@ -1,0 +1,121 @@
+---
+title: Compile-Time Evaluation
+---
+
+Djinn supports compile-time evaluation through `constexpr` and `consteval`, allowing expressions and functions to be computed during compilation rather than at runtime.
+
+## constexpr Variables
+
+A `constexpr` variable must be initialized with a compile-time constant expression. The value is computed by the compiler and inlined at every usage site:
+
+```djinn
+constexpr i32 WIDTH = 80;
+constexpr i32 HEIGHT = 24;
+constexpr i32 AREA = WIDTH * HEIGHT;
+```
+
+Supported expressions in constexpr initializers:
+- Integer, float, and boolean literals
+- Arithmetic: `+`, `-`, `*`, `/`, `%`
+- Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
+- Logic: `&&`, `||`, `!`
+- Unary negation: `-`
+- Type casts between numeric types
+- References to other `constexpr` variables or `const` struct fields
+- Number literal formats: hex (`0xFF`), binary (`0b1010`), separators (`1_000_000`), scientific (`1e9`)
+
+```djinn
+constexpr i32 BUF_SIZE = 8192;
+
+i32 main() {
+    i8* buffer = i8[BUF_SIZE];  // fixed-size stack array
+    buffer[0] = 42;
+    return (i32)buffer[0];
+}
+```
+
+## constexpr Functions
+
+A `constexpr` function **can** be evaluated at compile time when all arguments are known constants, or at runtime otherwise:
+
+```djinn
+constexpr i32 square(i32 x) {
+    return x * x;
+}
+
+constexpr i32 factorial(i32 n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+i32 main() {
+    constexpr i32 val = square(5);  // evaluated at compile time
+    i32 x = 10;
+    i32 y = square(x);             // evaluated at runtime (x is not constexpr)
+    return val + y;
+}
+```
+
+### Supported in constexpr function bodies
+
+- Local variables and assignments
+- `if`/`else` branching
+- `while` and `for` loops
+- `return` statements
+- Calls to other `constexpr` functions
+- All arithmetic, comparison, and logic operations
+
+### Restrictions
+
+- Cannot call `extern` functions (I/O, malloc, etc.)
+- Cannot use pointers or heap allocation
+- Cannot be `async`
+- Loop iterations are bounded (default: 1,000,000) to prevent infinite loops
+- Call depth is bounded (default: 512) to prevent stack overflow
+
+## consteval Functions
+
+A `consteval` function **must** be evaluated at compile time. If called with non-constant arguments, the compiler emits an error:
+
+```djinn
+consteval i32 compile_time_only(i32 x) {
+    return x * 2 + 1;
+}
+
+i32 main() {
+    i32 a = compile_time_only(10);  // OK: argument is a literal
+    // i32 x = 10;
+    // i32 b = compile_time_only(x);  // ERROR: x is not a compile-time constant
+    return a;
+}
+```
+
+`consteval` functions do not exist at runtime — they are fully erased after compilation.
+
+## Struct Const Fields
+
+Struct `const` fields are evaluated at compile time using the same evaluator:
+
+```djinn
+struct Config {
+    const i32 MAX_CONNECTIONS = 100;
+    const i32 TIMEOUT_MS = 30 * 1000;
+    const i32 BUFFER_SIZE = 4 * 1024;
+}
+
+i32 main() {
+    return Config.BUFFER_SIZE;  // 4096, inlined at compile time
+}
+```
+
+## How It Works
+
+The Djinn compiler includes a stack-based bytecode VM that runs during compilation:
+
+1. **Compile**: The AST expression/function is compiled to bytecode (PUSH, ADD, JMP, CALL, RET, etc.)
+2. **Execute**: The VM runs the bytecode on a value stack with local variable slots and call frames
+3. **Inline**: The resulting constant is emitted directly into the LLVM IR
+
+This architecture allows complex compile-time computation (loops, recursion, branching) while keeping the compiler fast and the evaluation bounded.
