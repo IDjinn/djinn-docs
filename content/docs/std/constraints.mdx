@@ -1,0 +1,89 @@
+---
+title: Constraints
+---
+
+import { Table } from '@/components/table';
+
+## Overview
+
+Constraints are interfaces defined in `std::types::constraints` that enable generic type bounds. They are used with `where` clauses to restrict what types can be used as generic parameters.
+
+```djinn
+import std::types::constraints;
+```
+
+## Interfaces
+
+### Hashable
+
+Requires a type to produce a hash value. Used extensively by collections (`array<T>`, `map<Key, Value>`, `arr<T>`).
+
+```djinn
+interface Hashable {
+    u64 hash();
+}
+```
+
+All primitive types (`i8` through `u64`, `f32`, `f64`), `str`, `string`, `i8*`, and `arr<T>` implement `Hashable` by default.
+
+### Comparable{'<T>'}
+
+Requires a type to support ordering comparisons.
+
+```djinn
+interface Comparable<T> {
+    i32 compare<O>(O other);
+}
+```
+
+Returns a negative value if less, zero if equal, positive if greater.
+
+### Equatable{'<T>'}
+
+Requires a type to support equality via the `==` operator.
+
+```djinn
+interface Equatable<T> {
+    operator == (T left, T right) -> bool;
+}
+```
+
+Implemented by default for `str`, `string`, `i8*`, and `arr<T>`.
+
+### Addition{'<T>'}
+
+Requires a type to support the `+` operator.
+
+```djinn
+interface Addition<T> {
+    operator + (T left, T right) -> T;
+}
+```
+
+### Serializable{'<TOut>'}
+
+Requires a type to convert itself into a serialized form.
+
+```djinn
+interface Serializable<TOut> {
+    TOut serialize();
+}
+```
+
+## Using Constraints
+
+Constraints are applied with `where` clauses on generic types:
+
+```djinn
+struct array<T> : Hashable
+where T : Hashable {
+    // T must implement Hashable
+}
+
+struct map<Key, Value>
+    where Key : Hashable, Equatable;
+    where Value : Hashable, Equatable
+{
+    // Key and Value must implement both Hashable and Equatable
+}
+```

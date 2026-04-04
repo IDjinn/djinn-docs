@@ -1,0 +1,84 @@
+---
+title: Logger
+---
+
+import { Table } from '@/components/table';
+
+## Overview
+
+The `Logger` struct in `std::logger` provides structured logging with multiple severity levels. Backed by a C runtime logger implementation.
+
+```djinn
+import std::logger;
+```
+
+## Log Levels
+
+<Table
+  columns={[
+    { header: 'Level', width: 'w-1/4' },
+    { header: 'Enum Value' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>TRACE</code>, '0', 'Fine-grained diagnostic information'] },
+    { cells: [<code>DEBUG</code>, '1', 'Debugging information'] },
+    { cells: [<code>INFO</code>, '2', 'Informational messages'] },
+    { cells: [<code>WARN</code>, '3', 'Potentially harmful situations'] },
+    { cells: [<code>ERROR</code>, '4', 'Error events'] },
+    { cells: [<code>FATAL</code>, '5', 'Critical errors that may cause termination'] },
+  ]}
+/>
+
+## Output Targets
+
+```djinn
+enum LoggerOutput {
+    STDOUT,
+    STDERR
+}
+```
+
+## Constructor
+
+```djinn
+Logger log = Logger("my-service");
+```
+
+Creates a logger with the given name, defaulting to stdout and TRACE level.
+
+## Methods
+
+<Table
+  columns={[
+    { header: 'Method', width: 'w-1/3' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>trace(str message)</code>, 'Log at TRACE level'] },
+    { cells: [<code>debug(str message)</code>, 'Log at DEBUG level'] },
+    { cells: [<code>info(str message)</code>, 'Log at INFO level'] },
+    { cells: [<code>warn(str message)</code>, 'Log at WARN level'] },
+    { cells: [<code>error(str message)</code>, 'Log at ERROR level'] },
+    { cells: [<code>fatal(str message)</code>, 'Log at FATAL level'] },
+    { cells: [<code>setLevel(i32 level)</code>, 'Change the minimum log level'] },
+    { cells: [<code>destroy()</code>, 'Frees the logger resources'] },
+  ]}
+/>
+
+## Example
+
+```djinn
+import std::logger;
+
+void main() {
+    Logger log = Logger("app");
+
+    log.info("Application started");
+    log.debug("Loading configuration...");
+    log.warn("Config file not found, using defaults");
+    log.error("Failed to connect to database");
+
+    log.destroy();
+}
+```

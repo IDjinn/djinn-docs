@@ -2,6 +2,8 @@
 title: Collections
 ---
 
+import { Table } from '@/components/table';
+
 ## Array Slices
 
 Array slices (`T[]`) are a view into contiguous data with a pointer and length:
@@ -95,3 +97,166 @@ i32 main() {
 - `type[length]` always allocates on the **stack** (no malloc/free needed)
 - For heap allocation, use `new` with a constructor or `malloc` via extern
 - Inside `async` functions, the compiler automatically promotes stack allocations to the coroutine frame on the heap
+
+## array{'<T>'}
+
+A generic, dynamically-sized array collection. Manages its own heap memory with automatic growth. Requires `T : Hashable`.
+
+```djinn
+import std::collections;
+
+struct array<T> : Hashable
+where T : Hashable {
+    T* data;
+    size length;
+    size capacity;
+}
+```
+
+### Constructor
+
+```djinn
+array<i32> nums = array<i32>();
+```
+
+### Methods
+
+<Table
+  columns={[
+    { header: 'Method', width: 'w-1/3' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>push(T value)</code>, 'Appends an element to the end. Grows capacity automatically.'] },
+    { cells: [<code>get(size index) → T</code>, 'Returns the element at the given index. Asserts bounds.'] },
+    { cells: [<code>set(size index, T value)</code>, 'Replaces the element at the given index. Asserts bounds.'] },
+    { cells: [<code>length() → size</code>, 'Returns the number of elements.'] },
+    { cells: [<code>reserve(size capacity)</code>, 'Pre-allocates memory for at least the given capacity.'] },
+    { cells: [<code>hash() → u64</code>, 'Computes a hash over all elements.'] },
+    { cells: [<code>destroy()</code>, 'Frees the underlying memory.'] },
+  ]}
+/>
+
+### Example
+
+```djinn
+import std::collections;
+
+i32 main() {
+    array<i32> nums = array<i32>();
+    nums.reserve(16u);
+
+    nums.push(10);
+    nums.push(20);
+    nums.push(30);
+
+    i32 second = nums.get(1u);  // 20
+    nums.set(0u, 99);
+
+    nums.destroy();
+    return second;
+}
+```
+
+## map{'<Key, Value>'}
+
+A generic hash map using open addressing with linear probing. Requires `Key : Hashable, Equatable` and `Value : Hashable, Equatable`.
+
+```djinn
+import std::collections;
+
+struct map<Key, Value>
+    where Key : Hashable, Equatable;
+    where Value : Hashable, Equatable
+{
+    Key* keys;
+    Value* values;
+    i8* states;
+    size count;
+    size capacity;
+}
+```
+
+### Constructor
+
+```djinn
+map<i32, i32> m = map<i32, i32>();  // initial capacity: 16
+```
+
+### Methods
+
+<Table
+  columns={[
+    { header: 'Method', width: 'w-1/3' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>set(Key key, Value value)</code>, 'Inserts or updates the value for the given key. Grows at 75% load factor.'] },
+    { cells: [<code>get(Key key) → Value</code>, 'Returns the value for the given key. Asserts if key not found.'] },
+    { cells: [<code>has(Key key) → bool</code>, 'Returns true if the key exists in the map.'] },
+    { cells: [<code>remove(Key key) → bool</code>, 'Removes the entry for the given key. Returns true if it existed.'] },
+    { cells: [<code>length() → size</code>, 'Returns the number of entries.'] },
+    { cells: [<code>hash() → u64</code>, 'Computes a hash over all keys.'] },
+    { cells: [<code>destroy()</code>, 'Frees all underlying memory (keys, values, states).'] },
+  ]}
+/>
+
+### Example
+
+```djinn
+import std::collections;
+
+i32 main() {
+    map<i32, i32> scores = map<i32, i32>();
+
+    scores.set(1, 100);
+    scores.set(2, 200);
+    scores.set(3, 300);
+
+    bool exists = scores.has(2);    // true
+    i32 val = scores.get(1);        // 100
+
+    scores.remove(3);
+
+    scores.destroy();
+    return val;
+}
+```
+
+## range
+
+Represents a numeric range with configurable bounds and step. Created implicitly by range-for syntax or explicitly.
+
+```djinn
+struct range {
+    i32 start;
+    i32 end;
+    i32 step;
+    u1 start_inclusive;
+    u1 end_inclusive;
+}
+```
+
+### Methods
+
+<Table
+  columns={[
+    { header: 'Method', width: 'w-1/3' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>length() → i32</code>, 'Returns the number of elements in the range.'] },
+    { cells: [<code>is_empty() → bool</code>, 'Returns true if the range contains no elements.'] },
+  ]}
+/>
+
+### Range-for Syntax
+
+Ranges are most commonly used in for loops:
+
+```djinn
+for (i32 i in 0..10) { }      // 0 to 9 (exclusive end)
+for (i32 i in 0..=10) { }     // 0 to 10 (inclusive end)
+for (i32 i in [0..10]) { }    // 0 to 9, closed start
+for (i32 i in [0..10)) { }    // 0 to 9, half-open
+```

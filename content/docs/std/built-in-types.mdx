@@ -58,6 +58,65 @@ import { Table } from '@/components/table';
   ]}
 />
 
+### Floating Point
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Size' },
+    { header: 'Precision' },
+  ]}
+  rows={[
+    { cells: [<code>f32</code>, '4 bytes', 'Single precision (IEEE 754)'] },
+    { cells: [<code>f64</code>, '8 bytes', 'Double precision (IEEE 754)'] },
+  ]}
+/>
+
+### Primitive Constants
+
+All numeric types expose `MAX_VALUE` and `MIN_VALUE` constants. Floating-point types also expose `MIN_POSITIVE` and `EPSILON`:
+
+```djinn
+i32 max = i32.MAX_VALUE;   // 0x7FFFFFFF
+i32 min = i32.MIN_VALUE;   // 0x80000000
+u64 umax = u64.MAX_VALUE;  // 0xFFFFFFFFFFFFFFFF
+
+f64 eps = f64.EPSILON;          // 2.2204460492503131e-16
+f32 minPos = f32.MIN_POSITIVE;  // 1.17549435e-38
+```
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/6' },
+    { header: 'MAX_VALUE' },
+    { header: 'MIN_VALUE' },
+  ]}
+  rows={[
+    { cells: [<code>i8</code>, '127', '-128'] },
+    { cells: [<code>i16</code>, '32767', '-32768'] },
+    { cells: [<code>i32</code>, '0x7FFFFFFF', '0x80000000'] },
+    { cells: [<code>i64</code>, '0x7FFFFFFFFFFFFFFF', '0x8000000000000000'] },
+    { cells: [<code>u8</code>, '255', '0'] },
+    { cells: [<code>u16</code>, '65535', '0'] },
+    { cells: [<code>u32</code>, '0xFFFFFFFF', '0'] },
+    { cells: [<code>u64</code>, '0xFFFFFFFFFFFFFFFF', '0'] },
+  ]}
+/>
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/6' },
+    { header: 'MAX_VALUE' },
+    { header: 'MIN_VALUE' },
+    { header: 'MIN_POSITIVE' },
+    { header: 'EPSILON' },
+  ]}
+  rows={[
+    { cells: [<code>f32</code>, '3.40282347e+38', '-3.40282347e+38', '1.17549435e-38', '1.19209290e-7'] },
+    { cells: [<code>f64</code>, '1.7976931348623157e+308', '-1.7976931348623157e+308', '2.2250738585072014e-308', '2.2204460492503131e-16'] },
+  ]}
+/>
+
 ### Size Types
 
 <Table
@@ -100,11 +159,20 @@ import { Table } from '@/components/table';
       cells: [<code>str</code>, 'String slice (borrowed)'],
       details: <>
         <p>A reference to a sequence of characters. Contains a pointer to the data and a length.</p>
-        <pre><code>{`struct str {\n    i8* data;\n    size len;\n}`}</code></pre>
+        <pre><code>{`struct str {\n    i8* data;\n    size length;\n}`}</code></pre>
         <p><strong>Methods:</strong></p>
         <ul>
           <li><code>is_empty() -&gt; bool</code> — returns <code>true</code> if length is 0</li>
           <li><code>ptr() -&gt; i8*</code> — returns raw pointer to the data</li>
+          <li><code>hash() -&gt; u64</code> — returns a hash of the string content</li>
+          <li><code>slice(size start, size length) -&gt; str</code> — returns a sub-slice of the string</li>
+          <li><code>substring(size start, size length) -&gt; string</code> — returns a new heap-allocated substring</li>
+          <li><code>concat(string left, string right) -&gt; string</code> — concatenates two strings</li>
+        </ul>
+        <p><strong>Operators:</strong></p>
+        <ul>
+          <li><code>==</code> — compares two <code>str</code> values by content</li>
+          <li><code>+</code> — concatenates two strings into a new <code>string</code></li>
         </ul>
       </>,
     },
@@ -112,11 +180,22 @@ import { Table } from '@/components/table';
       cells: [<code>string</code>, 'Owned string (heap-allocated)'],
       details: <>
         <p>A growable, heap-allocated string. Contains a pointer, length, and capacity.</p>
-        <pre><code>{`struct string {\n    i8* data;\n    size len;\n    size capacity;\n}`}</code></pre>
+        <pre><code>{`struct string {\n    mut i8* data;\n    size length;\n    size capacity;\n}`}</code></pre>
         <p><strong>Methods:</strong></p>
         <ul>
           <li><code>is_empty() -&gt; bool</code> — returns <code>true</code> if length is 0</li>
           <li><code>ptr() -&gt; i8*</code> — returns raw pointer to the data</li>
+          <li><code>length() -&gt; i32</code> — returns the string length</li>
+          <li><code>capacity() -&gt; i32</code> — returns the allocated capacity</li>
+          <li><code>hash() -&gt; u64</code> — returns a hash of the string content</li>
+          <li><code>slice(size start, size length) -&gt; str</code> — returns a sub-slice of the string</li>
+          <li><code>substring(size start, size length) -&gt; string</code> — returns a new heap-allocated substring</li>
+          <li><code>concat(string left, string right) -&gt; string</code> — concatenates two strings</li>
+        </ul>
+        <p><strong>Operators:</strong></p>
+        <ul>
+          <li><code>==</code> — compares two <code>string</code> values by content</li>
+          <li><code>+</code> — concatenates two strings into a new <code>string</code></li>
         </ul>
       </>,
     },
@@ -134,12 +213,17 @@ import { Table } from '@/components/table';
     {
       cells: [<code>{'arr<T>'}</code>, 'Array slice'],
       details: <>
-        <p>A reference to a contiguous sequence of elements of type <code>T</code>. Contains a pointer and a length.</p>
-        <pre><code>{`struct arr<T> {\n    T* data;\n    size len;\n}`}</code></pre>
+        <p>A reference to a contiguous sequence of elements of type <code>T</code>. Contains a pointer and a length. Requires <code>T : Hashable</code>.</p>
+        <pre><code>{`struct arr<T> : Hashable\nwhere T : Hashable {\n    T* data;\n    size length;\n}`}</code></pre>
         <p><strong>Methods:</strong></p>
         <ul>
           <li><code>is_empty() -&gt; bool</code> — returns <code>true</code> if length is 0</li>
           <li><code>ptr() -&gt; i8*</code> — returns raw pointer to the data</li>
+          <li><code>hash() -&gt; u64</code> — computes a hash over all elements</li>
+        </ul>
+        <p><strong>Operators:</strong></p>
+        <ul>
+          <li><code>==</code> — compares two arrays by hash</li>
         </ul>
       </>,
     },
@@ -160,6 +244,32 @@ import { Table } from '@/components/table';
     },
   ]}
 />
+
+## Reflection
+
+### TypeInfo
+
+```djinn
+struct TypeInfo {
+    i32 id;
+    i32 size;
+    i8* name;
+    u8 kind;
+}
+```
+
+Runtime type metadata available via the `typeof` intrinsic. The `kind` field encodes the category: `0` = integer, `1` = float, `2` = pointer.
+
+### object
+
+```djinn
+struct object : Hashable {
+    TypeInfo* type;
+    void* data;
+}
+```
+
+A type-erased value with runtime type information. Used internally by variadic functions to inspect argument types at runtime.
 
 ## Enums
 

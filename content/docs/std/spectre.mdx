@@ -1,0 +1,176 @@
+---
+title: Spectre
+---
+
+import { Table } from '@/components/table';
+
+## Overview
+
+The `Spectre` module in `std::sys` provides rich terminal output: styled text, colors, tables, trees, progress bars, panels, grids, and interactive prompts. Inspired by [Spectre.Console](https://spectreconsole.net/) for .NET.
+
+```djinn
+import std::sys;
+```
+
+## Terminal
+
+<Table
+  columns={[
+    { header: 'Method', width: 'w-1/3' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>Spectre.width() → i32</code>, 'Returns the terminal width in columns.'] },
+    { cells: [<code>Spectre.height() → i32</code>, 'Returns the terminal height in rows.'] },
+    { cells: [<code>Spectre.rawEnable()</code>, 'Enables raw terminal mode (no line buffering).'] },
+    { cells: [<code>Spectre.rawDisable()</code>, 'Restores normal terminal mode.'] },
+    { cells: [<code>Spectre.readKey() → i32</code>, 'Reads a single keypress.'] },
+  ]}
+/>
+
+## Text Styling
+
+### Style Constants
+
+<Table
+  columns={[
+    { header: 'Style', width: 'w-1/4' },
+    { header: 'Constant' },
+  ]}
+  rows={[
+    { cells: ['Reset', <code>Spectre.RESET (0)</code>] },
+    { cells: ['Bold', <code>Spectre.BOLD (1)</code>] },
+    { cells: ['Dim', <code>Spectre.DIM (2)</code>] },
+    { cells: ['Italic', <code>Spectre.ITALIC (3)</code>] },
+    { cells: ['Underline', <code>Spectre.UNDERLINE (4)</code>] },
+    { cells: ['Blink', <code>Spectre.BLINK (5)</code>] },
+    { cells: ['Strikethrough', <code>Spectre.STRIKETHROUGH (9)</code>] },
+  ]}
+/>
+
+### Foreground Colors
+
+`FG_BLACK (30)`, `FG_RED (31)`, `FG_GREEN (32)`, `FG_YELLOW (33)`, `FG_BLUE (34)`, `FG_MAGENTA (35)`, `FG_CYAN (36)`, `FG_WHITE (37)`
+
+### Background Colors
+
+`BG_BLACK (40)`, `BG_RED (41)`, `BG_GREEN (42)`, `BG_YELLOW (43)`, `BG_BLUE (44)`, `BG_MAGENTA (45)`, `BG_CYAN (46)`, `BG_WHITE (47)`
+
+### Methods
+
+```djinn
+Spectre.styled("Hello", Spectre.BOLD);              // bold text
+Spectre.styled2("Error", Spectre.BOLD, Spectre.FG_RED);  // bold red
+Spectre.styledLn("Done", Spectre.FG_GREEN);          // green + newline
+Spectre.color256("text", 208);                       // 256-color mode
+Spectre.rgb("text", 255, 128, 0);                    // true color RGB
+Spectre.rgbBg("text", 0, 0, 128);                    // RGB background
+Spectre.reset();                                      // reset all styles
+```
+
+## Markup
+
+Rich text with inline tags, similar to Spectre.Console's markup syntax:
+
+```djinn
+Spectre.markup("[bold]Hello[/] [red]World[/]");
+Spectre.markupLine("[green]Success![/]");
+```
+
+## Widgets
+
+### SpectreTable
+
+```djinn
+SpectreTable table = SpectreTable.create();
+table.addHeader("Name");
+table.addHeader("Score");
+table.addRow();
+table.addCell("Alice");
+table.addCell("100");
+table.addRow();
+table.addCell("Bob");
+table.addCell("85");
+table.render();
+table.destroy();
+```
+
+### SpectreTree
+
+```djinn
+SpectreTree tree = SpectreTree.create();
+i32 root = tree.add("Root", -1);
+i32 child1 = tree.add("Child 1", root);
+tree.add("Leaf", child1);
+tree.add("Child 2", root);
+tree.render();
+tree.destroy();
+```
+
+### SpectreGrid
+
+```djinn
+SpectreGrid grid = SpectreGrid.create(3);  // 3 columns
+grid.addRow();
+grid.addCell("A");
+grid.addCell("B");
+grid.addCell("C");
+grid.render();
+grid.destroy();
+```
+
+### SpectreSpinner
+
+```djinn
+SpectreSpinner spin = SpectreSpinner.create("Loading...");
+for (i32 i in 0..10) {
+    spin.tick();
+}
+spin.finish("Done!");
+```
+
+### SpectreBar
+
+```djinn
+SpectreBar.bar("CPU", 75, 100, 40, Spectre.FG_GREEN);
+SpectreBar.chart("Resource Usage");
+```
+
+## Layout & Decoration
+
+```djinn
+Spectre.rule();                        // horizontal rule
+Spectre.ruleTitle("Section");          // titled rule
+Spectre.panel("Content here", "Title"); // bordered panel
+
+SpectreAlign.center("Centered text");
+SpectreAlign.right("Right-aligned");
+SpectreAlign.repeat('-', 40);
+
+SpectreTextPath.render("/home/user/docs/file.txt");
+
+SpectreEmoji.printCheck("Passed");
+SpectreEmoji.printCross("Failed");
+SpectreEmoji.printWarning("Caution");
+SpectreEmoji.printInfo("Note");
+```
+
+## Interactive Prompts
+
+```djinn
+i32 choice = Spectre.prompt("Select option (1-3):");
+
+i8* buf = i8[256];
+i32 len = Spectre.promptInto("Enter name:", buf);
+
+bool yes = Spectre.confirm("Continue?");
+```
+
+## Progress Bars
+
+```djinn
+for (mut i32 i = 0; i <= 100; i = i + 1) {
+    Spectre.progressBar(i, 100, 50);
+}
+Spectre.progressFinish(50);
+```

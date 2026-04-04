@@ -1,0 +1,71 @@
+---
+title: Console
+---
+
+import { Table } from '@/components/table';
+
+## Overview
+
+The `Console` struct in `std::sys` provides standard I/O operations. It supports both synchronous and async output, with a buffered formatting system that handles `{0}`, `{1}`, etc. placeholders.
+
+```djinn
+import std::sys;
+```
+
+## Methods
+
+<Table
+  columns={[
+    { header: 'Method', width: 'w-2/5' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>Console.printf(i8* format)</code>, 'Writes a C-style format string to stdout (delegates to C printf).'] },
+    { cells: [<code>Console.error(i8* message)</code>, 'Writes a message to stderr. Returns c_result.'] },
+    { cells: [<code>Console.writeSync(str format, ...args)</code>, 'Synchronous buffered write with placeholder formatting.'] },
+    { cells: [<code>await Console.write(str format, ...args)</code>, 'Async buffered write with placeholder formatting.'] },
+    { cells: [<code>await Console.print(i8* message, i64 len)</code>, 'Async raw write to stdout.'] },
+    { cells: [<code>await Console.readLine()</code>, 'Async read a line from stdin. Returns void* buffer.'] },
+  ]}
+/>
+
+## Formatted Output
+
+`writeSync` and `write` support indexed placeholders `{0}`, `{1}`, etc. with variadic arguments. The formatting engine inspects runtime type info to print integers, floats, and strings:
+
+```djinn
+import std::sys;
+
+void main() {
+    Console.writeSync("Hello {0}, you are {1} years old\n", "Alice", 30);
+}
+```
+
+## Async I/O
+
+The async methods use the Djinn runtime's event loop for non-blocking I/O:
+
+```djinn
+import std::sys;
+
+async void main() {
+    await Console.write("Enter your name: ");
+    void* input = await Console.readLine();
+    await Console.write("Hello, {0}!\n", (i8*)input);
+}
+```
+
+## Constants
+
+<Table
+  columns={[
+    { header: 'Constant', width: 'w-1/4' },
+    { header: 'Value' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>Console.stdin</code>, '0', 'Standard input file descriptor'] },
+    { cells: [<code>Console.stdout</code>, '1', 'Standard output file descriptor'] },
+    { cells: [<code>Console.stderr</code>, '2', 'Standard error file descriptor'] },
+  ]}
+/>

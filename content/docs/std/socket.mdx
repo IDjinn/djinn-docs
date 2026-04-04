@@ -1,0 +1,94 @@
+---
+title: Socket
+---
+
+import { Table } from '@/components/table';
+
+## Overview
+
+The `Socket` struct in `std::net` provides async TCP socket operations built on top of the Djinn runtime's event loop.
+
+```djinn
+import std::net;
+```
+
+## Constructor
+
+```djinn
+Socket sock = Socket();
+```
+
+Creates a new TCP socket. Asserts on failure.
+
+## Fields
+
+<Table
+  columns={[
+    { header: 'Field', width: 'w-1/4' },
+    { header: 'Type' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>fd</code>, <code>i64</code>, 'File descriptor for the underlying socket'] },
+    { cells: [<code>connected</code>, <code>bool</code>, 'Whether the socket is currently connected'] },
+  ]}
+/>
+
+## Methods
+
+<Table
+  columns={[
+    { header: 'Method', width: 'w-2/5' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>bind(i8* addr, i32 port) → i64</code>, 'Binds the socket to an address and port.'] },
+    { cells: [<code>listen(i32 backlog) → i64</code>, 'Starts listening for incoming connections.'] },
+    { cells: [<code>await accept() → Socket</code>, 'Async. Accepts an incoming connection, returns a new Socket.'] },
+    { cells: [<code>await connect(i8* addr, i32 port) → i64</code>, 'Async. Connects to a remote address.'] },
+    { cells: [<code>await send(void* buf, i64 count) → i64</code>, 'Async. Sends data. Asserts if not connected.'] },
+    { cells: [<code>await recv(void* buf, i64 count) → i64</code>, 'Async. Receives data. Sets connected=false on disconnect.'] },
+    { cells: [<code>isConnected() → bool</code>, 'Returns whether the socket is connected.'] },
+    { cells: [<code>close() → i64</code>, 'Closes the socket.'] },
+  ]}
+/>
+
+## Server Example
+
+```djinn
+import std::net;
+import std::sys;
+
+async void main() {
+    Socket server = Socket();
+    server.bind("0.0.0.0", 8080);
+    server.listen(128);
+
+    while (true) {
+        Socket client = await server.accept();
+        i8* buf = i8[1024];
+        i64 n = await client.recv(buf, 1024);
+        await client.send(buf, n);  // echo back
+        client.close();
+    }
+}
+```
+
+## Client Example
+
+```djinn
+import std::net;
+
+async void main() {
+    Socket sock = Socket();
+    await sock.connect("127.0.0.1", 8080);
+
+    i8* msg = "Hello, server!";
+    await sock.send(msg, 14);
+
+    i8* buf = i8[1024];
+    i64 n = await sock.recv(buf, 1024);
+
+    sock.close();
+}
+```
