@@ -67,10 +67,110 @@ enum result<T, E> {
 }
 
 i32 main() {
-    result<i32, i8*> success = result<i32, i8*>::Ok(100);
-    result<i32, i8*> failure = result<i32, i8*>::Error("not found");
+    result<i32, str> success = result<i32, str>::Ok(100);
+    result<i32, str> failure = result<i32, str>::Error("not found");
     return 0;
 }
 ```
 
 Both `optional` and `result` are provided in the standard library via `import std::types`.
+
+## Pattern Matching
+
+Use `switch` as an expression to match enum variants and extract their payload. Each arm uses `->` to map a variant to a result value:
+
+```djinn
+enum optional<T> {
+    Empty(),
+    Value(T)
+}
+
+i32 main() {
+    auto opt = optional<i32>::Value(69);
+
+    i32 result = switch opt {
+        Value val -> val,
+        Empty -> -1
+    };
+
+    return result; // 69
+}
+```
+
+### Variants without payload
+
+For variants with no data, simply match the name:
+
+```djinn
+enum Color {
+    Red(),
+    Green(),
+    Blue()
+}
+
+i32 main() {
+    Color c = Color::Green();
+
+    i32 result = switch c {
+        Red -> 1,
+        Green -> 2,
+        Blue -> 3
+    };
+
+    return result; // 2
+}
+```
+
+### Expressions in arms
+
+Each arm can contain arbitrary expressions:
+
+```djinn
+auto opt = optional<i32>::Value(10);
+
+i32 result = switch opt {
+    Value val -> val * 2 + 1,
+    Empty -> 0
+};
+// result == 21
+```
+
+### Pattern matching in functions
+
+```djinn
+i32 unwrap_or(optional<i32> opt, i32 default_val) {
+    return switch opt {
+        Value val -> val,
+        Empty -> default_val
+    };
+}
+
+i32 main() {
+    auto a = optional<i32>::Value(50);
+    auto b = optional<i32>::Empty();
+
+    return unwrap_or(a, 0) + unwrap_or(b, 99); // 149
+}
+```
+
+### Multi-payload matching
+
+Generic enums with multiple type parameters work the same way:
+
+```djinn
+enum result<T, E> {
+    Ok(T),
+    Error(E)
+}
+
+i32 main() {
+    auto r = result<i32, i32>::Error(7);
+
+    i32 val = switch r {
+        Ok v -> v,
+        Error e -> e
+    };
+
+    return val; // 7
+}
+```

@@ -30,10 +30,10 @@ i32 mut counter = 0;
 counter = counter + 1;  // OK
 ```
 
-Mutable parameters work the same way:
+Mutable parameters use `mut` before the type:
 
 ```djinn
-void increment(i32 x mut) {
+void increment(mut i32 x) {
     x = x + 1;
 }
 ```
@@ -70,7 +70,7 @@ constexpr i32 SIZE = 64;
 i8* buf = i8[SIZE];  // stack-allocated array of 64 bytes
 ```
 
-See [Compile-Time Evaluation](/docs/constexpr) for full details on `constexpr` and `consteval`.
+See [Compile-Time Evaluation](/docs/advanced) for full details on `constexpr` and `consteval`.
 
 ## Scope
 

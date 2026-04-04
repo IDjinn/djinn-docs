@@ -1,0 +1,136 @@
+---
+title: Macros
+---
+
+Macros perform token-level substitution at parse time, allowing you to generate code from patterns. They expand before type checking or code generation.
+
+## Declaration
+
+A macro is declared with the `macro` keyword, a name, and one or more rules. Each rule maps a parameter list to a body:
+
+```djinn
+macro square {
+    (expr v) => {
+        v * v
+    }
+}
+```
+
+## Fragment Types
+
+Parameters are typed with fragment specifiers that describe what kind of syntax the argument captures:
+
+| Fragment | Captures |
+|----------|----------|
+| `expr` | Any expression |
+
+Arguments are wrapped in parentheses for precedence safety during substitution. `mul(2 + 3, 4 + 1)` expands to `(2 + 3) * (4 + 1)`, not `2 + 3 * 4 + 1`.
+
+## Multiple Parameters
+
+```djinn
+macro add {
+    (expr a, expr b) => {
+        a + b
+    }
+}
+
+i32 main() {
+    return add(10, 32); // 42
+}
+```
+
+## The `local` Modifier
+
+Without `local`, arguments are substituted directly into the body. If a parameter appears more than once, the argument expression is evaluated multiple times:
+
+```djinn
+macro square_bad {
+    (expr v) => {
+        v * v  // v is substituted twice — side effects run twice
+    }
+}
+```
+
+The `local` modifier creates a temporary variable to evaluate the argument once:
+
+```djinn
+macro square {
+    (local expr v) => {
+        v * v
+    }
+}
+```
+
+When you call `square(1 + 2)`, the compiler expands it to:
+
+```djinn
+// expanded:
+auto square_local = 1 + 2;  // evaluated once
+square_local * square_local
+```
+
+This matters when the argument has side effects:
+
+```djinn
+i32 counter = 0;
+
+i32 next() {
+    counter = counter + 1;
+    return counter;
+}
+
+i32 main() {
+    return square(next()); // 1 (next() called once, 1 * 1)
+}
+```
+
+Without `local`, `square_bad(next())` would expand to `next() * next()`, calling `next()` twice and returning `1 * 2 = 2`.
+
+You can mix `local` and non-local parameters:
+
+```djinn
+macro add_squared {
+    (local expr a, expr b) => {
+        a * a + b
+    }
+}
+```
+
+## Side Effect Warning (W6001)
+
+The compiler emits warning **W6001** when a non-local parameter is used more than once in the macro body, since this may cause unintended double evaluation. The warning is suppressed when:
+
+- The parameter uses the `local` modifier
+- The parameter appears only once in the body
+
+## Nested Macro Calls
+
+Macros can be composed — the result of one macro can be passed to another:
+
+```djinn
+macro square {
+    (local expr v) => {
+        v * v
+    }
+}
+
+macro add {
+    (expr a, expr b) => {
+        a + b
+    }
+}
+
+i32 main() {
+    return add(square(3), square(4)); // 9 + 16 = 25
+}
+```
+
+## How Expansion Works
+
+1. The parser encounters a macro call (e.g. `square(3 + 1)`)
+2. Arguments are captured as token streams based on their fragment type
+3. Each argument is substituted into the macro body:
+   - **`local` params**: a temp variable declaration (`__macro_<name>_<param> = <arg>`) is prepended, and the body references the temp variable
+   - **Regular params**: tokens are substituted directly, wrapped in parentheses
+4. The resulting token stream is re-parsed as an expression in the current scope

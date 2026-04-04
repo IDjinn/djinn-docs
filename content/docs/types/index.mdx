@@ -1,0 +1,157 @@
+---
+title: Type System
+---
+
+import { Table } from '@/components/table';
+
+export const defined = '/docs/std/built-in-types';
+
+## Built-in Types
+
+<Card>
+Check [types](/docs/std/built-in-types) details
+
+<Table
+  columns={[
+    { header: 'Type', width: 'w-1/4' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    {
+      cells: [<a href={`${defined}#integers`}><code>{'i(N)'}</code></a>, 'Integer\'s type'],
+    },
+    {
+      cells: [<a href={`${defined}#unsigned-integers`}><code>{'u(N)'}</code></a>, 'Unsigned integer\'s type'],
+    },
+    {
+      cells: [<a href={`${defined}#booleans`}><code>{'bool'}</code></a>, 'Boolean type'],
+    },
+    {
+      cells: [<a href={`${defined}#arrays`}><code>{'arr<T>'}</code></a>, 'Array slice'],
+    },
+    {
+      cells: [<a href={`${defined}#strings`}><code>{'str'}</code></a>, 'String slice'],
+    },
+    {
+      cells: [<a href={`${defined}#pointers`}><code>{'T*'}</code></a>, 'Pointer type'],
+    },
+  ]}
+/>
+</Card>
+
+## Defined Types
+
+You can define your own types using keyword `struct`
+
+```djinn
+struct User {
+    string name;
+    i32 age;
+    // ...
+}
+```
+
+All fields can be described with `modifiers`, then `type` and finally their `name` 
+
+## Generic Types
+
+A generic struct can have any number of generic types, they must be compile-time known. When compiled, it creates each type its own
+morphilized struct
+
+```djinn
+struct Repository<TEntity, TKey> {
+    DatabaseConnection connection;
+
+    public TEntity getById(TKey id) { 
+        //.. do work 
+    }
+}
+```
+
+## Transparent Types
+
+A transparent type wraps a primitive with its own type identity. Each transparent type is unique at compile time — `c_result` is **not** the same as `i32`, even though the generated code is identical. This gives you stronger type checking (e.g. when binding C libraries) without any runtime cost.
+
+```djinn
+struct c_result : i32;
+struct bool : i1;
+```
+
+You can also implement methods on transparent types, just like regular structs. The compiler lowers them to the underlying primitive in the generated code, so there is zero overhead.
+
+## Object Boxing
+
+The `std::types::object` type represents a boxed value that carries both the data and its type information at runtime.
+
+```djinn
+struct TypeInfo {
+    i32 id;
+    i32 size;
+    i8* name;
+    u8 kind;
+}
+
+struct object : Hashable {
+    TypeInfo* type;
+    void* data;
+}
+```
+
+`TypeInfo` stores the type's numeric id, byte size, name string, and a `kind` discriminator. The `object` struct holds a pointer to its `TypeInfo` and a `void*` to the actual data.
+
+### When is boxing used?
+
+Boxing happens automatically in two cases:
+
+- **Variadic functions** — all arguments passed to variadic parameters are boxed, so you can inspect their type at runtime
+- **`object` variables or parameters** — assigning any value to an `object` variable or passing it to an `object` parameter triggers automatic boxing
+
+```djinn
+i32 foo(object obj) {
+    printf("object kind: %d\n", obj.type.kind);
+    printf("hash: %d\n", obj.type.hash());
+    printf("name: %s\n", obj.type.name);
+}
+
+void main() {
+    object bar = "hello world";
+    foo(bar);
+}
+```
+
+Output:
+```
+object kind: 3
+hash: 983072202
+name: std::types::object
+```
+
+Through the `TypeInfo` pointer you can query the kind, name, and hash of any boxed value at runtime.
+
+### Type Kind
+
+The `kind` field allows the runtime to read and format values without unboxing them. The kind values are:
+
+| Kind | Type |
+|------|------|
+| `0` | Integer (`i8`..`i64`, `u8`..`u64`) |
+| `1` | Float (`f32`, `f64`) |
+| `2` | Pointer (`i8*`, strings) |
+| `3` | Struct |
+
+Combined with `type.size`, the runtime can cast `void* data` to the correct pointer type and read the value directly — no unboxing needed.
+
+```djinn
+void inspect(object obj) {
+    if (obj.type.kind == 0 && obj.type.size <= 4) {
+        i32* val = (i32*)obj.data;
+        printf("integer: %d\n", *val);
+    } else if (obj.type.kind == 1) {
+        f64* val = (f64*)obj.data;
+        printf("float: %g\n", *val);
+    } else if (obj.type.kind == 2) {
+        i8* val = (i8*)obj.data;
+        printf("string: %s\n", val);
+    }
+}
+```

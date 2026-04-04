@@ -34,6 +34,21 @@ i32 main() {
 }
 ```
 
+### Local constexpr / consteval
+
+`constexpr` and `consteval` variables can also be declared inside function bodies:
+
+```djinn
+i32 main() {
+    constexpr i32 a = 10;
+    consteval i32 b = 7 * 6;
+    constexpr i32 SIZE = 32;
+
+    i8* buf = i8[SIZE];
+    return a + b;
+}
+```
+
 ## constexpr Functions
 
 A `constexpr` function **can** be evaluated at compile time when all arguments are known constants, or at runtime otherwise:
@@ -96,17 +111,38 @@ i32 main() {
 
 ## Struct Const Fields
 
-Struct `const` fields are evaluated at compile time using the same evaluator:
+Struct `const` fields are evaluated at compile time using the same evaluator. They can be accessed statically via the struct name or through an instance:
 
 ```djinn
-struct Config {
-    const i32 MAX_CONNECTIONS = 100;
-    const i32 TIMEOUT_MS = 30 * 1000;
-    const i32 BUFFER_SIZE = 4 * 1024;
+struct Player {
+    const i32 MAX_HP = 100;
+    i32 hp;
+    i32 x;
+    i32 y;
 }
 
 i32 main() {
-    return Config.BUFFER_SIZE;  // 4096, inlined at compile time
+    Player p = { 50, 10, 20 };
+    i32 a = Player.MAX_HP;  // static access
+    i32 b = p.MAX_HP;       // instance access (same value)
+    return a;
+}
+```
+
+Const fields do not occupy space in the struct layout — they are inlined at every usage site. In the example above, `Player` has only 3 fields (`hp`, `x`, `y`).
+
+### Rules
+
+- A `const` field **must** have an initializer — omitting it is a compile error
+- `mut const` is invalid — the two modifiers are mutually exclusive
+- `const` fields can have visibility modifiers (`public`, `private`)
+
+```djinn
+struct Direction {
+    public const i32 UP = 0;
+    public const i32 DOWN = 1;
+    public const i32 LEFT = 2;
+    public const i32 RIGHT = 3;
 }
 ```
 
