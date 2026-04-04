@@ -64,23 +64,23 @@
       "patterns": [
         {
           "name": "constant.numeric.float.djinn",
-          "match": "\\b[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?\\b"
+          "match": "\\b[0-9][0-9_']*\\.[0-9][0-9_']*([eE][+-]?[0-9][0-9_']*)?\\b"
         },
         {
           "name": "constant.numeric.hex.djinn",
-          "match": "\\b0[xX][0-9a-fA-F]+\\b"
+          "match": "\\b0[xX][0-9a-fA-F][0-9a-fA-F_']*\\b"
         },
         {
           "name": "constant.numeric.binary.djinn",
-          "match": "\\b0[bB][01]+\\b"
+          "match": "\\b0[bB][01][01_']*\\b"
         },
         {
           "name": "constant.numeric.octal.djinn",
-          "match": "\\b0[oO][0-7]+\\b"
+          "match": "\\b0[oO][0-7][0-7_']*\\b"
         },
         {
           "name": "constant.numeric.integer.djinn",
-          "match": "\\b[0-9]+\\b"
+          "match": "\\b[0-9][0-9_']*([eE][+-]?[0-9][0-9_']*)?\\b"
         }
       ]
     },
@@ -88,11 +88,11 @@
       "patterns": [
         {
           "name": "keyword.control.djinn",
-          "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return)\\b"
+          "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return|async|await|spawn|yield|this|in)\\b"
         },
         {
           "name": "keyword.other.djinn",
-          "match": "\\b(import|namespace|extern|struct|enum|interface)\\b"
+          "match": "\\b(import|namespace|extern|struct|enum|interface|impl|where|union|new|macro|const|constexpr|consteval)\\b"
         },
         {
           "name": "constant.language.djinn",
@@ -104,11 +104,11 @@
       "patterns": [
         {
           "name": "storage.type.primitive.djinn",
-          "match": "\\b(i8|i16|i32|i64|i1|u8|u16|u32|u64|f32|f64|void|string|auto|bool)\\b"
+          "match": "\\b(i8|i16|i32|i64|i1|u8|u16|u32|u64|f32|f64|void|string|str|auto|bool|object)\\b"
         },
         {
           "name": "storage.type.djinn",
-          "match": "\\b(optional|result|size|size_long|c_result)\\b"
+          "match": "\\b(optional|result|size|size_long|c_result|array|map)\\b"
         },
         {
           "name": "entity.name.type.djinn",
@@ -157,6 +157,18 @@
         {
           "name": "keyword.operator.arrow.djinn",
           "match": "=>"
+        },
+        {
+          "name": "keyword.operator.match-arrow.djinn",
+          "match": "->"
+        },
+        {
+          "name": "keyword.operator.range.djinn",
+          "match": "\\.\\.=?"
+        },
+        {
+          "name": "keyword.operator.variadic.djinn",
+          "match": "\\.\\.\\."
         }
       ]
     },
@@ -183,6 +195,13 @@
     },
     "functions": {
       "patterns": [
+        {
+          "comment": "Intrinsic functions",
+          "match": "\\b(sizeof|alignof|typeof|likely|unlikely|expect)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "support.function.builtin.djinn" }
+          }
+        },
         {
           "name": "meta.function.djinn",
           "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
