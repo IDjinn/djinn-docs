@@ -1,0 +1,129 @@
+---
+title: Pattern Matching
+---
+
+Djinn provides pattern matching through two mechanisms: the `is` expression for runtime type checking on boxed values, and switch expressions for enum destructuring.
+
+## `is` Expression
+
+The `is` expression checks the runtime type of an `object` (boxed value). It returns a boolean and optionally extracts the underlying value into a new variable.
+
+### Basic Type Check
+
+```djinn
+i32 check_type(object obj) {
+    if (obj is i32) {
+        return 1;
+    }
+    if (obj is f64) {
+        return 2;
+    }
+    if (obj is str) {
+        return 3;
+    }
+    return 0;
+}
+```
+
+### Variable Binding
+
+When a name is provided after the type, the value is extracted and bound to a local variable of that type. The variable is only meaningful inside the `if` block where the check succeeds:
+
+```djinn
+struct Inspector {
+    public static i32 extract(...args) {
+        object first = args[0];
+
+        if (first is i32 value) {
+            // 'value' is i32, extracted from first.data
+            return value;
+        }
+
+        if (first is f64 floatVal) {
+            return (i32)floatVal;
+        }
+
+        return -1;
+    }
+}
+
+i32 main() {
+    return Inspector.extract(42); // returns 42
+}
+```
+
+### Negation
+
+Use `!` to negate:
+
+```djinn
+if (!(obj is i32)) {
+    printf("not an integer\n");
+}
+```
+
+### How It Works
+
+The `object` struct contains a `TypeInfo*` pointer with metadata about the boxed value:
+
+```djinn
+struct object {
+    TypeInfo* type;
+    void* data;
+}
+
+struct TypeInfo {
+    i32 id;      // FNV-1a hash of type name
+    i32 size;
+    i8* name;
+    u8 kind;
+}
+```
+
+The `is` expression compares `object.type.id` against the compile-time computed hash of the target type name. This is a single integer comparison at runtime.
+
+With variable binding, the compiler additionally extracts `object.data`, casts it to the target type pointer, and loads the value.
+
+### Supported Types
+
+Any type can be checked:
+
+```djinn
+obj is i32      // signed 32-bit integer
+obj is i64      // signed 64-bit integer
+obj is u32      // unsigned 32-bit integer
+obj is f32      // 32-bit float
+obj is f64      // 64-bit float
+obj is str      // string slice
+```
+
+### Error: Non-Object Operand
+
+Using `is` on a non-object type is a compile error:
+
+```djinn
+i32 x = 42;
+if (x is i32) { }  // ERROR: 'is' expression requires operand of type 'object'
+```
+
+## Switch Expression (Enum Pattern Matching)
+
+Switch expressions destructure enum variants and return a value:
+
+```djinn
+enum Shape {
+    Circle(f64),
+    Rectangle(f64, f64),
+    Empty()
+}
+
+f64 area(Shape s) {
+    return switch s {
+        Circle radius -> 3.14159 * radius * radius,
+        Rectangle w -> w,
+        Empty -> 0.0
+    };
+}
+```
+
+Each arm matches a variant by name, optionally binds the payload, and produces a result expression. The switch expression evaluates to the result of the matched arm.
