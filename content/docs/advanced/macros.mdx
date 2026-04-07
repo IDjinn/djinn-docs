@@ -10,7 +10,7 @@ A macro is declared with the `macro` keyword, a name, and one or more rules. Eac
 
 ```djinn
 macro square {
-    (expr v) => {
+    (expression v) => {
         v * v
     }
 }
@@ -20,17 +20,23 @@ macro square {
 
 Parameters are typed with fragment specifiers that describe what kind of syntax the argument captures:
 
-| Fragment | Captures |
-|----------|----------|
-| `expr` | Any expression |
+| Fragment | Captures | Substitution |
+|----------|----------|-------------|
+| `expression` | Any expression | Wrapped in `()` for precedence |
+| `identifier` | A single identifier token | Direct token |
+| `literal` | A literal value (`42`, `3.14`, `"hello"`) | Direct token |
+| `type` | A type (`i32`, `array<str>`) | Direct tokens |
+| `block` | A block `{ ... }` | Direct tokens |
 
-Arguments are wrapped in parentheses for precedence safety during substitution. `mul(2 + 3, 4 + 1)` expands to `(2 + 3) * (4 + 1)`, not `2 + 3 * 4 + 1`.
+Arguments of type `expression` are wrapped in parentheses for precedence safety during substitution. `mul(2 + 3, 4 + 1)` expands to `(2 + 3) * (4 + 1)`, not `2 + 3 * 4 + 1`.
+
+Arguments of type `identifier` are substituted directly as a single token (no wrapping).
 
 ## Multiple Parameters
 
 ```djinn
 macro add {
-    (expr a, expr b) => {
+    (expression a, expression b) => {
         a + b
     }
 }
@@ -46,7 +52,7 @@ Without `local`, arguments are substituted directly into the body. If a paramete
 
 ```djinn
 macro square_bad {
-    (expr v) => {
+    (expression v) => {
         v * v  // v is substituted twice — side effects run twice
     }
 }
@@ -56,7 +62,7 @@ The `local` modifier creates a temporary variable to evaluate the argument once:
 
 ```djinn
 macro square {
-    (local expr v) => {
+    (local expression v) => {
         v * v
     }
 }
@@ -70,39 +76,97 @@ auto square_local = 1 + 2;  // evaluated once
 square_local * square_local
 ```
 
-This matters when the argument has side effects:
+### Rule-Level `local`
+
+Place `local` before the opening parenthesis to apply it to all `expression` parameters in that rule:
 
 ```djinn
-i32 counter = 0;
-
-i32 next() {
-    counter = counter + 1;
-    return counter;
-}
-
-i32 main() {
-    return square(next()); // 1 (next() called once, 1 * 1)
+macro sum_squares {
+    local (expression a, expression b) => { a * a + b * b }
 }
 ```
 
-Without `local`, `square_bad(next())` would expand to `next() * next()`, calling `next()` twice and returning `1 * 2 = 2`.
-
-You can mix `local` and non-local parameters:
-
-```djinn
-macro add_squared {
-    (local expr a, expr b) => {
-        a * a + b
-    }
-}
-```
+This is equivalent to writing `local` on each expression parameter individually.
 
 ## Side Effect Warning (W6001)
 
-The compiler emits warning **W6001** when a non-local parameter is used more than once in the macro body, since this may cause unintended double evaluation. The warning is suppressed when:
+The compiler emits warning **W6001** when a non-local `expression` parameter is used more than once in the macro body, since this may cause unintended double evaluation. The warning is suppressed when:
 
 - The parameter uses the `local` modifier
 - The parameter appears only once in the body
+- The parameter is not of type `expression` (e.g., `identifier` or literal tokens)
+
+## Multi-Rule Pattern Matching
+
+A macro can have multiple rules. When invoked, the compiler tries each rule in order and uses the first one that matches. Matching considers both the number of arguments and literal token values.
+
+```djinn
+macro maybe_double {
+    (local expression v, expression multiplier) => { v * multiplier }
+    (local expression v) => { v * 2 }
+}
+
+i32 main() {
+    i32 a = maybe_double(5, 3);  // matches rule 1 → 15
+    i32 b = maybe_double(5);     // matches rule 2 → 10
+}
+```
+
+### Ambiguity Detection
+
+Rules with identical signatures (same arity and same fragment/literal types) are rejected at parse time:
+
+```djinn
+macro bad {
+    (expression a, expression b) => { a }
+    (expression a, expression b) => { b }  // error: ambiguous rule
+}
+```
+
+## Literal Token Matching
+
+Bare identifiers in a rule's parameter list act as literal token matchers — they must match exactly at the call site:
+
+```djinn
+macro calc {
+    (double, local expression v) => { v + v }
+    (square, local expression v) => { v * v }
+    (expression v) => { v }
+}
+
+i32 main() {
+    i32 a = calc(double, 5);  // matches "double" → 10
+    i32 b = calc(square, 4);  // matches "square" → 16
+    i32 c = calc(7);          // matches expression-only → 7
+}
+```
+
+This is useful for compile-time dispatch, similar to Rust's `macro_rules!` pattern matching:
+
+```djinn
+macro log {
+    (debug, expression msg) => { trace(msg) }
+    (info, expression msg)  => { trace(msg) }
+    (off, expression msg)   => void
+}
+
+log(debug, 42);  // generates: trace(42)
+log(off, 42);    // generates nothing
+```
+
+## Void Rules
+
+Use `=> void` instead of `=> { body }` to indicate that a rule generates no code. The macro call evaluates to `0`:
+
+```djinn
+macro feature {
+    (enabled, expression code)  => { code }
+    (disabled, expression code) => void
+}
+
+i32 a = feature(enabled, 42);   // 42
+i32 b = feature(disabled, 99);  // 0
+```
 
 ## Nested Macro Calls
 
@@ -110,13 +174,13 @@ Macros can be composed — the result of one macro can be passed to another:
 
 ```djinn
 macro square {
-    (local expr v) => {
+    (local expression v) => {
         v * v
     }
 }
 
 macro add {
-    (expr a, expr b) => {
+    (expression a, expression b) => {
         a + b
     }
 }
@@ -130,7 +194,10 @@ i32 main() {
 
 1. The parser encounters a macro call (e.g. `square(3 + 1)`)
 2. Arguments are captured as token streams based on their fragment type
-3. Each argument is substituted into the macro body:
+3. Rules are tried in order — first match by arity and literal tokens wins
+4. Each argument is substituted into the matched rule's body:
    - **`local` params**: a temp variable declaration (`__macro_<name>_<param> = <arg>`) is prepended, and the body references the temp variable
-   - **Regular params**: tokens are substituted directly, wrapped in parentheses
-4. The resulting token stream is re-parsed as an expression in the current scope
+   - **Regular `expression` params**: tokens are substituted directly, wrapped in parentheses
+   - **`identifier` params**: the identifier token is substituted directly
+   - **Literal tokens**: consumed during matching, not substituted
+5. The resulting token stream is re-parsed as an expression in the current scope

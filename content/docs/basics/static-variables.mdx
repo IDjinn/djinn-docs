@@ -1,0 +1,89 @@
+---
+title: Static Variables
+---
+
+Static variables are global variables declared at the top level of a program. They require the `static` keyword and are immutable by default.
+
+## Declaration
+
+```djinn
+static i32 MAX_SIZE = 1024;
+static i32 DEFAULT_PORT = 8080;
+```
+
+Static variables must have an initializer that can be evaluated at compile time (integer, float, or string literals, and simple constant expressions).
+
+## Mutable Static Variables
+
+Use `mut` to declare a mutable static variable:
+
+```djinn
+static mut i32 counter = 0;
+
+void increment() {
+    counter = counter + 1;
+}
+
+i32 main() {
+    increment();
+    increment();
+    increment();
+    return counter; // 3
+}
+```
+
+Without `mut`, attempting to assign to a static variable is an error.
+
+## Namespaces
+
+Static variables participate in the namespace system. When declared inside a namespaced file, they are accessible via their qualified name:
+
+```djinn
+// in config.djinn
+namespace app::config;
+
+static i32 MAX_CONNECTIONS = 100;
+```
+
+```djinn
+// in main.djinn
+import app::config;
+
+i32 main() {
+    return app::config::MAX_CONNECTIONS;
+}
+```
+
+## Usage with Macros
+
+Static variables work naturally with macros:
+
+```djinn
+macro log {
+    (debug, expression msg) => { trace(msg) }
+    (off, expression msg)   => void
+}
+
+static mut i32 log_count = 0;
+
+void trace(i32 val) {
+    log_count = log_count + val;
+}
+
+i32 main() {
+    log(debug, 10);
+    log(off, 99);
+    return log_count; // 10
+}
+```
+
+## Comparison with constexpr
+
+| Feature | `static` | `constexpr` |
+|---------|----------|-------------|
+| Mutable | Yes (with `mut`) | No |
+| Runtime access | Yes (LLVM global) | Inlined at compile time |
+| Address-takeable | Yes | No |
+| Use case | Global state, counters | Constants, config values |
+
+Use `constexpr` for values that never change and benefit from inlining. Use `static` for global state that functions need to read and write.
