@@ -7,95 +7,118 @@ Attributes provide metadata to the compiler about how code should be compiled. T
 ## Syntax
 
 ```djinn
-[attribute-name]
-[attribute-name(value)]
-[attribute-name(key = value)]
-[attribute-name(value1, key = value2)]
+[AttributeName]
+[AttributeName(value)]
+[AttributeName(key = value)]
+[AttributeName(value1, key = value2)]
 ```
 
-Attributes support positional and named arguments. Values can be integers, floats, strings, or booleans.
+Attributes use PascalCase naming and support positional and named arguments. Values can be integers, floats, strings, or booleans.
+
+## Defining Attributes
+
+Attributes are defined in `std/sys/intrinsics.djinn` using the `attribute` keyword:
+
+```djinn
+// Without fields:
+attribute ForceInline(AttributeTarget.Function | AttributeTarget.Method);
+
+// With fields:
+attribute Align(AttributeTarget.Struct | AttributeTarget.Field | AttributeTarget.Parameter) {
+    i32 value;
+}
+
+// Compiler-filled attribute (transparent to caller):
+attribute Location(AttributeTarget.Field | AttributeTarget.Parameter | AttributeTarget.Variable) {
+    i8* fileName;
+    i32 line;
+    i32 column;
+}
+```
+
+The `attribute` keyword is a contextual keyword — valid only at top-level declarations.
 
 ## Function / Method Attributes
 
-### `[force-inline]`
+### `[ForceInline]`
 
 Forces the compiler to always inline the function at call sites:
 
 ```djinn
 struct Math {
-    [force-inline]
+    [ForceInline]
     public static i32 add(i32 a, i32 b) {
         return a + b;
     }
 }
 ```
 
-### `[no-inline]`
+### `[NoInline]`
 
 Prevents the compiler from inlining the function:
 
 ```djinn
 struct Debug {
-    [no-inline]
+    [NoInline]
     public static void log(i8* msg) {
         printf("%s\n", msg);
     }
 }
 ```
 
-### `[noreturn]`
+### `[NoReturn]`
 
 Marks a function that never returns (e.g., abort, infinite loop):
 
 ```djinn
 struct Util {
-    [noreturn]
+    [NoReturn]
     public static void abort() {
         while (true) {}
     }
 }
 ```
 
-### `[hot]` / `[cold]`
+### `[Hot]` / `[Cold]`
 
-Optimization hints for branch prediction. `[hot]` marks frequently called functions, `[cold]` marks rarely called ones:
+Optimization hints for branch prediction. `[Hot]` marks frequently called functions, `[Cold]` marks rarely called ones:
 
 ```djinn
 struct Handler {
-    [hot]
+    [Hot]
     public static void fast_path(i32 x) {
         // called frequently
     }
 
-    [cold]
+    [Cold]
     public static void error_handler(i32 code) {
         // rarely called
     }
 }
 ```
 
-### `[nosync]`
+### `[NoSync]`
 
 Marks a function that does not synchronize with other threads:
 
 ```djinn
-[nosync]
+[NoSync]
 i32 pure_compute(i32 x) {
     return x * x + 1;
 }
 ```
 
-### `[nounwind]`
+### `[NoUnwind]`
 
 Marks a function that never throws. Applied implicitly to all Djinn functions since Djinn has no exception mechanism.
 
-### `[willreturn]`
+### `[WillReturn]`
 
 Guarantees the function will always return (no infinite loops):
 
 ```djinn
 struct Math {
-    [willreturn]
+    [WillReturn]
     public static i32 abs(i32 x) {
         if (x < 0) { return -x; }
         return x;
@@ -103,18 +126,18 @@ struct Math {
 }
 ```
 
-### `[norecurse]`
+### `[NoRecurse]`
 
 Marks a function that does not call itself directly or indirectly.
 
 ## Struct Attributes
 
-### `[align(N)]`
+### `[Align(N)]`
 
 Specifies memory alignment for a struct:
 
 ```djinn
-[align(16)]
+[Align(16)]
 struct Vec4 {
     f32 x;
     f32 y;
@@ -135,24 +158,50 @@ Marks a struct as compiler-intrinsic. Its fields are populated by the compiler a
 }
 ```
 
-### `[deprecated(message = "...")]`
+### `[Deprecated(message = "...")]`
 
 Marks a declaration as deprecated with an optional message:
 
 ```djinn
-[deprecated(message = "use ApiV2 instead")]
+[Deprecated(message = "use ApiV2 instead")]
 struct OldApi {
     public static void call() {}
 }
 ```
 
-## `[llvm(...)]` Escape Hatch
+## Parameter Attributes
+
+### `[Location]`
+
+Marks a parameter as compiler-provided. The compiler automatically fills in the source location (file, line, column) of the call site. The parameter is **transparent to the caller** — callers don't pass it:
+
+```djinn
+struct Debug {
+    [ForceInline]
+    public static void assert(bool condition, i8* message, [Location] Location sourceLocation) {
+        if (unlikely(condition == false)) {
+            Debug.assert_fail(message, sourceLocation);
+        }
+        assume(condition);
+    }
+}
+
+// Caller only passes 2 arguments — Location is injected by the compiler:
+Debug::assert(x > 0, "x must be positive");
+```
+
+The `Location` struct contains:
+- `i8* fileName` — source file path
+- `i32 line` — line number
+- `i32 column` — column number
+
+## `[Llvm(...)]` Escape Hatch
 
 For advanced users, raw LLVM attribute strings can be passed directly:
 
 ```djinn
 struct Util {
-    [llvm("mustprogress")]
+    [Llvm("mustprogress")]
     public static i32 compute(i32 x) {
         return x * 2;
     }
@@ -162,7 +211,7 @@ struct Util {
 Multiple LLVM attributes can be specified:
 
 ```djinn
-[llvm("mustprogress", "nosync")]
+[Llvm("mustprogress", "nosync")]
 i32 pure(i32 x) {
     return x;
 }
@@ -182,45 +231,30 @@ Multiple attributes can be stacked on a single declaration:
 
 ```djinn
 struct Math {
-    [force-inline]
-    [hot]
+    [ForceInline]
+    [Hot]
     public static i32 add(i32 a, i32 b) {
         return a + b;
     }
 }
 ```
 
-## Defining Custom Attributes (Future)
-
-Built-in attributes are defined in `std/sys/intrinsics.djinn` using the `[attribute]` meta-attribute:
-
-```djinn
-[attribute(AttributeTarget.Function | AttributeTarget.Method)]
-struct ForceInline;
-
-[attribute(AttributeTarget.Struct | AttributeTarget.Field)]
-struct Align {
-    i32 value;
-}
-```
-
-This mechanism will be extended to support user-defined attributes via macros in the future.
-
 ## Attribute Reference
 
 | Attribute | Targets | Parameters | LLVM |
 |-----------|---------|------------|------|
-| `force-inline` | Function, Method | - | `alwaysinline` |
-| `no-inline` | Function, Method | - | `noinline` |
-| `noreturn` | Function, Method | - | `noreturn` |
-| `hot` | Function, Method | - | `hot` |
-| `cold` | Function, Method | - | `cold` |
-| `nosync` | Function, Method | - | `nosync` |
-| `nounwind` | Function, Method | - | `nounwind` |
-| `willreturn` | Function, Method | - | `willreturn` |
-| `norecurse` | Function, Method | - | `norecurse` |
-| `align` | Struct, Field, Parameter | `i32 value` | alignment |
+| `ForceInline` | Function, Method | - | `alwaysinline` |
+| `NoInline` | Function, Method | - | `noinline` |
+| `NoReturn` | Function, Method | - | `noreturn` |
+| `Hot` | Function, Method | - | `hot` |
+| `Cold` | Function, Method | - | `cold` |
+| `NoSync` | Function, Method | - | `nosync` |
+| `NoUnwind` | Function, Method | - | `nounwind` |
+| `WillReturn` | Function, Method | - | `willreturn` |
+| `NoRecurse` | Function, Method | - | `norecurse` |
+| `Align` | Struct, Field, Parameter | `i32 value` | alignment |
 | `intrinsic` | Struct | - | compile-time |
-| `no_mangle` | Function, Struct | - | skip mangling |
-| `deprecated` | All | `i8* message` | - |
-| `llvm` | Function, Method | `i8* attr` | raw passthrough |
+| `NoMangle` | Function, Struct | - | skip mangling |
+| `Deprecated` | All | `i8* message` | - |
+| `Llvm` | Function, Method | `i8* attr` | raw passthrough |
+| `Location` | Field, Parameter, Variable | - | compiler-injected caller info |
