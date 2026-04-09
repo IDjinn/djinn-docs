@@ -1,0 +1,107 @@
+---
+title: Library Compilation
+---
+
+Djinn supports separate compilation of libraries into LLVM IR files (`.ll`) that can be linked into other projects.
+
+## Compiling a Library
+
+Use `--lib` mode to compile without requiring a `main()` function:
+
+```bash
+djinn --lib --no-std -c -r std/
+```
+
+Or configure via `djinn.proj`:
+
+```yaml
+project: "my-lib"
+version: "1.0.0"
+
+compiler:
+  library-mode: true
+  output:
+    file: "mylib"
+    directory: "build"
+  libs: []          # empty = no std auto-include
+```
+
+Then simply run:
+
+```bash
+djinn -r src/
+```
+
+### What `--lib` does
+
+- Skips `main()` wrapper generation
+- Skips async runtime initialization (coro wrappers, event loop)
+- All functions and struct types are exported with `ExternalLinkage`
+- Output is a `.ll` file ready for linking
+
+## Linking Libraries
+
+Use `-l` to link pre-compiled `.ll` files:
+
+```bash
+djinn -l build/mylib.ll main.djinn
+```
+
+Multiple libraries can be linked:
+
+```bash
+djinn --std-decl -l build/std.ll -l build/mylib.ll main.djinn
+```
+
+### Declaration-Only Mode (`--std-decl`)
+
+When linking a pre-compiled library, you can skip re-compiling its source by using `--std-decl`. This parses the library source for type declarations and function signatures, but skips generating function bodies (they come from the linked `.ll`):
+
+```bash
+# Step 1: Compile the library
+djinn --lib --no-std -c -r std/
+
+# Step 2: Use it with declarations only
+djinn --std-decl -l build/std.ll main.djinn
+```
+
+## Generic Deduplication
+
+Monomorphized generic functions (e.g., `arr<i32>::push`) use `LinkOnceODR` linkage with COMDAT groups. If both a library and user code instantiate the same generic type, the linker keeps one copy -- no duplicate symbol errors.
+
+## TypeInfo Across Modules
+
+TypeInfo globals also use `LinkOnceODR` + COMDAT. Type IDs are computed via FNV-1a hash of the type name, which is deterministic. The same type compiled in different modules produces the same ID, ensuring `is` expressions work correctly across linked modules.
+
+## Project File Reference
+
+Library-related settings in `djinn.proj`:
+
+```yaml
+compiler:
+  library-mode: true          # Compile as library (no main required)
+  reflection-mode: all        # none | annotated | all
+  no-cache: true              # Skip build cache
+
+  output:
+    file: "mylib"             # Output filename (mylib.ll)
+    directory: "build"        # Output directory
+    bundle-modules: false     # true = single .ll, false = per namespace
+
+  libs:
+    - std                     # "std" = djinn stdlib
+    - "path/to/other.ll"     # External .ll to link
+```
+
+## CLI Flags Reference
+
+| Flag | Description |
+|------|-------------|
+| `--lib` | Library mode (skip main, runtime) |
+| `--no-std` | Don't include standard library |
+| `--std-decl` | Include std declarations only (use with `-l`) |
+| `-l file.ll` | Link external LLVM IR module |
+| `--bundle` | Bundle all namespaces into single `.ll` |
+| `-c` | Compile only (don't generate binary) |
+| `--reflect-all` | Generate TypeInfoExt for all types |
+| `--reflect-annotated` | Generate TypeInfoExt for `[Reflect]` types only |

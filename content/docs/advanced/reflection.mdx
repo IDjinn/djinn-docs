@@ -1,0 +1,119 @@
+---
+title: Reflection
+---
+
+Djinn provides a layered RTTI (Runtime Type Information) system with zero overhead for types that don't use it.
+
+## TypeInfo (Basic)
+
+Every boxed value (`object`) carries a pointer to a `TypeInfo` constant:
+
+```djinn
+struct TypeInfo {
+    i32 id;      // FNV-1a hash of type name (deterministic)
+    i32 size;    // byte size of the type
+    i8* name;    // null-terminated type name string
+    u8 kind;     // 0=int, 1=float, 2=ptr, 3=struct, 4=uint, 5=str, 6=string
+}
+```
+
+TypeInfo is generated **on demand** -- only when a value is boxed via `(object)` cast or variadic auto-boxing. Types never boxed have zero overhead.
+
+### Type checking with `is`
+
+```djinn
+void handle(object obj) {
+    if obj is i32 value {
+        // value is extracted and cast to i32
+    }
+}
+```
+
+The `is` expression compares `obj.type.id` at runtime against a compile-time constant.
+
+## TypeInfoExt (Full Reflection)
+
+For richer metadata (fields, methods, attributes), use `[Reflect]` on a struct or enable `reflection-mode: all` in the project file.
+
+```djinn
+struct AttributeInfo { i8* name; i8* value; }
+
+struct FieldInfo {
+    i8* name;
+    i32 typeId;
+    u16 offset;
+    u8 flags;            // 1=mut
+    u8 attrCount;
+    AttributeInfo* attrs;
+}
+
+struct MethodInfo {
+    i8* name;
+    void* funcPtr;
+    i32 returnTypeId;
+    u8 paramCount;
+    u8 flags;            // 2=static, 4=async
+    u8 attrCount;
+    AttributeInfo* attrs;
+}
+
+struct TypeInfoExt {
+    TypeInfo base;       // embedded (not pointer) -- safe to cast TypeInfoExt* to TypeInfo*
+    u16 fieldCount;
+    u16 methodCount;
+    u8 attrCount;
+    FieldInfo* fields;
+    MethodInfo* methods;
+    AttributeInfo* attrs;
+}
+```
+
+### Using `[Reflect]`
+
+```djinn
+[Reflect]
+struct Player {
+    mut i32 hp;
+    i32 maxHp;
+    i8* name;
+}
+```
+
+The compiler generates a `TypeInfoExt` global for `Player` with field info (names, offsets, typeIds) and method info.
+
+### Reflection Mode
+
+Control via `.proj` file:
+
+```yaml
+compiler:
+  reflection-mode: all        # Generate TypeInfoExt for ALL structs
+  # reflection-mode: annotated  # Only [Reflect] structs
+  # reflection-mode: none       # No reflection (default)
+```
+
+Or via CLI:
+
+```bash
+djinn --reflect-all main.djinn
+djinn --reflect-annotated main.djinn
+```
+
+## Cross-Module Reflection
+
+TypeInfo and TypeInfoExt globals use `LinkOnceODR` linkage with COMDAT groups. This means:
+
+- Same type compiled in different modules produces identical globals
+- The linker deduplicates them (keeps one copy)
+- `is` expressions work across module boundaries
+- FNV-1a type IDs are deterministic (same name = same ID everywhere)
+
+## Zero-Cost Design
+
+| Scenario | Overhead |
+|----------|----------|
+| Type never boxed, no `[Reflect]` | **0 bytes** |
+| Type boxed (variadics, `object` cast) | **16 bytes** (TypeInfo) |
+| Type with `[Reflect]` or `--reflect-all` | **16 bytes + field/method tables** |
+
+TypeInfo globals are only generated when needed. LLVM's optimizer strips unreferenced globals.
