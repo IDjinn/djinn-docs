@@ -2,9 +2,96 @@
 title: Library Compilation
 ---
 
-Djinn supports separate compilation of libraries into LLVM IR files (`.ll`) that can be linked into other projects.
+Djinn supports two library formats:
+- **`.ll`** — Raw LLVM IR, requires source or `--std-decl` for type information
+- **`.djlib`** — Self-contained library with metadata + bitcode, works without source code
 
-## Compiling a Library
+## `.djlib` Libraries (Recommended)
+
+A `.djlib` file packages LLVM bitcode alongside a JSON metadata blob containing all type definitions, function signatures, macros, and attributes. Consumers can type-check, call functions, and use types without needing the library source code.
+
+### Creating a `.djlib`
+
+Set the output filename with `.djlib` extension:
+
+```bash
+djinn std/ -o std.djlib -out build
+```
+
+Or via `djinn.proj`:
+
+```yaml
+project: "my-lib"
+version: "1.0.0"
+
+compiler:
+  output:
+    file: "mylib.djlib"
+    directory: "build"
+  libs: []
+```
+
+The `.djlib` extension automatically enables library mode (no `main()` required).
+
+### Using a `.djlib`
+
+Link with `-l`:
+
+```bash
+djinn playground/ -l build/std.djlib
+```
+
+Or via `djinn.proj`:
+
+```yaml
+compiler:
+  libs:
+    - ./build/std.djlib
+```
+
+When using `.djlib` libraries, the standard library source is **not** loaded — all types and functions come from the library metadata and bitcode.
+
+### What's Inside a `.djlib`
+
+A `.djlib` is a binary file with three sections:
+
+```
+[Header 16 bytes]
+[Metadata — JSON with all type information]
+[LLVM Bitcode — compiled code]
+```
+
+The metadata includes:
+- **Structs** — fields, methods, properties, generic parameters, attributes, interfaces implemented
+- **Functions** — signatures, parameters, async/constexpr flags
+- **Enums** — variants with payload types, generic parameters
+- **Interfaces** — method signatures, generic parameters
+- **Macros** — rules, fragment types, token streams (fully functional in consumer)
+- **Extern functions** — C FFI declarations with ABI info
+- **Impl blocks** — operator overloads and interface implementations
+- **Attributes** — declarations with target flags and schema fields
+- **Constants** — constexpr/consteval values
+- **Static variables** — global variables with types and mutability
+
+### How It Works
+
+```
+1. Compiler reads .djlib header + metadata
+2. Type names registered in parser (so user code can reference library types)
+3. Symbols injected into binder (structs, functions, enums, interfaces)
+4. User code is parsed and bound with full access to library types
+5. Generator emits LLVM declarations for library symbols
+6. Bitcode from .djlib is linked into the final module
+7. LLVM optimizer + clang produce the final binary
+```
+
+The compiler generates `declare` statements for library functions (not `define`) — the actual implementations come from the bitcode during linking. This means zero code duplication.
+
+## `.ll` Libraries (Legacy)
+
+Raw LLVM IR linking is still supported for advanced use cases.
+
+### Compiling a `.ll` Library
 
 Use `--lib` mode to compile without requiring a `main()` function:
 
@@ -15,31 +102,22 @@ djinn --lib --no-std -c -r std/
 Or configure via `djinn.proj`:
 
 ```yaml
-project: "my-lib"
-version: "1.0.0"
-
 compiler:
   library-mode: true
   output:
     file: "mylib"
     directory: "build"
-  libs: []          # empty = no std auto-include
+  libs: []
 ```
 
-Then simply run:
-
-```bash
-djinn -r src/
-```
-
-### What `--lib` does
+#### What `--lib` does
 
 - Skips `main()` wrapper generation
 - Skips async runtime initialization (coro wrappers, event loop)
 - All functions and struct types are exported with `ExternalLinkage`
 - Output is a `.ll` file ready for linking
 
-## Linking Libraries
+### Linking `.ll` Libraries
 
 Use `-l` to link pre-compiled `.ll` files:
 
@@ -55,7 +133,7 @@ djinn --std-decl -l build/std.ll -l build/mylib.ll main.djinn
 
 ### Declaration-Only Mode (`--std-decl`)
 
-When linking a pre-compiled library, you can skip re-compiling its source by using `--std-decl`. This parses the library source for type declarations and function signatures, but skips generating function bodies (they come from the linked `.ll`):
+When linking a pre-compiled `.ll`, you need `--std-decl` to get type information without re-compiling the library source:
 
 ```bash
 # Step 1: Compile the library
@@ -65,9 +143,11 @@ djinn --lib --no-std -c -r std/
 djinn --std-decl -l build/std.ll main.djinn
 ```
 
+This is unnecessary with `.djlib` — the metadata already contains all declarations.
+
 ## Generic Deduplication
 
-Monomorphized generic functions (e.g., `arr<i32>::push`) use `LinkOnceODR` linkage with COMDAT groups. If both a library and user code instantiate the same generic type, the linker keeps one copy -- no duplicate symbol errors.
+Monomorphized generic functions (e.g., `arr<i32>::push`) use `LinkOnceODR` linkage with COMDAT groups. If both a library and user code instantiate the same generic type, the linker keeps one copy — no duplicate symbol errors.
 
 ## TypeInfo Across Modules
 
@@ -81,27 +161,28 @@ Library-related settings in `djinn.proj`:
 compiler:
   library-mode: true          # Compile as library (no main required)
   reflection-mode: all        # none | annotated | all
-  no-cache: true              # Skip build cache
 
   output:
-    file: "mylib"             # Output filename (mylib.ll)
-    directory: "build"        # Output directory
-    bundle-modules: false     # true = single .ll, false = per namespace
+    file: "mylib.djlib"       # .djlib = auto library mode + metadata
+    directory: "build"
 
   libs:
-    - std                     # "std" = djinn stdlib
-    - "path/to/other.ll"     # External .ll to link
+    - std                     # "std" = djinn stdlib from source
+    - ./vendor/math.djlib     # .djlib = library with metadata
+    - ./vendor/legacy.ll      # .ll = raw LLVM IR linking
 ```
 
 ## CLI Flags Reference
 
 | Flag | Description |
 |------|-------------|
+| `-o file.djlib` | Output as `.djlib` (auto-enables library mode) |
 | `--lib` | Library mode (skip main, runtime) |
-| `--no-std` | Don't include standard library |
-| `--std-decl` | Include std declarations only (use with `-l`) |
-| `-l file.ll` | Link external LLVM IR module |
-| `--bundle` | Bundle all namespaces into single `.ll` |
+| `--no-std` | Don't include standard library source |
+| `--std-decl` | Include std declarations only (use with `-l .ll`) |
+| `-l file.djlib` | Link `.djlib` library (metadata + bitcode) |
+| `-l file.ll` | Link raw LLVM IR module |
+| `--bundle` | Bundle all namespaces into single output |
 | `-c` | Compile only (don't generate binary) |
 | `--reflect-all` | Generate TypeInfoExt for all types |
 | `--reflect-annotated` | Generate TypeInfoExt for `[Reflect]` types only |
