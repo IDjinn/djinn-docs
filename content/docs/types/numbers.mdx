@@ -1,0 +1,101 @@
+---
+title: Numbers
+---
+
+Djinn provides fixed-width integer and floating-point types, native-width aliases, and per-type
+overflow behavior via type/literal suffixes.
+
+## Integer Types
+
+Integers are `iN` (signed) and `uN` (unsigned) for widths 8, 16, 32, 64 and 128.
+
+```djinn
+i8 a = 127;
+u32 b = 4000000000;
+i64 c = 800'000'000'000;
+```
+
+Number literals support `_` and `'` separators, scientific notation (`1e9`), hex (`0xFF`) and
+binary (`0b1010`) notation.
+
+## Native-Width Types
+
+- `nint` — signed integer with the target platform's pointer width (`i64` on 64-bit targets,
+`i32` on 32-bit). Ideal for sizes, indexes and FFI with C `ptrdiff_t`/`intptr_t`.
+- `nfloat` — the platform's C `float` (IEEE 754 single precision, `f32`).
+- `ndouble` — the platform's C `double` (IEEE 754 double precision, `f64`).
+
+```djinn
+nint index = 0;
+nfloat ratio = 1.5;
+ndouble precise = 2.718281828;
+```
+
+Native types are display names: `typeof` and diagnostics show `nint`, and they interoperate
+freely with their fixed-width equivalents (`i64`, `f32`, `f64`).
+
+## Overflow Modes
+
+Plain integer arithmetic wraps silently on overflow (C-style). Every integer type — and integer
+literals — accept a suffix that selects what happens when an operation overflows:
+
+| Suffix | Mode | Behavior on overflow |
+|--------|------|----------------------|
+| `w` | wrapped | Two's complement wrap (the default, made explicit) |
+| `t` | trapped | Runtime panic — aborts the program |
+| `c` | checked | Raises the builtin `Overflow` error (requires a `throws` function) |
+| `s` | saturating | Clamps the result to `MIN_VALUE`/`MAX_VALUE` |
+
+```djinn
+i32 common = 123;
+i32w wrapped = 121231234w;      // wraps like C
+i32t trapped = 232134324t;      // panics on overflow
+i32c checked = 232343c;         // throws Overflow
+i32s saturation = 23498s;       // clamps to i32.MAX_VALUE
+```
+
+The mode is a property of the operation's operands: the left operand's mode wins, and the right
+one applies when the left has none. Conflicting explicit modes are a compile error.
+
+```djinn
+i32w a = 1000w;
+i32w b = a + 23;      // wrapping add (mode from `a`)
+i32w c = 2000w + 3w;  // wrapping add (mode from the literals)
+i32s d = 2000000000s;
+i32s e = d + d;       // saturates at i32.MAX_VALUE = 2147483647
+```
+
+### Checked overflow
+
+The `c` mode raises the language-level builtin `Overflow` error through the standard error
+handling mechanism, so the enclosing function must declare `throws`:
+
+```djinn
+i32 safeAdd(i32c a, i32c b) throws {
+    return a + b; // sets the error flag instead of wrapping
+}
+
+i32 main() throws {
+    i32 result = safeAdd(2147483647c, 1c) ?: -1; // try/fallback
+    return result;
+}
+```
+
+### Compile-time behavior
+
+Overflow rules also apply to literals and `constexpr`/`consteval` expressions:
+
+- An out-of-range literal is a compile error for `t` and `c` types
+- Saturating literals clamp at compile time (`i32s a = 3000000000s;` becomes `2147483647`)
+- Wrapped literals keep the C-style truncation
+
+```djinn
+i32t bad = 3000000000t;  // error: integer literal overflows 'i32t'
+i32s clamped = 3000000000s; // ok: value is i32.MAX_VALUE
+i32w wrapped = 3000000000w; // ok: wraps to -1294967296
+```
+
+### What is covered
+
+The `+`, `-`, `*`, `/`, `%` operators, unary negation (`-x`) and `++`/`--` all honor the overflow
+mode — including the `INT_MIN / -1` edge case for division and remainder.
