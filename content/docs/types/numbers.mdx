@@ -99,3 +99,77 @@ i32w wrapped = 3000000000w; // ok: wraps to -1294967296
 
 The `+`, `-`, `*`, `/`, `%` operators, unary negation (`-x`) and `++`/`--` all honor the overflow
 mode — including the `INT_MIN / -1` edge case for division and remainder.
+
+## Non-Zero Types
+
+The `n` suffix declares an integer type that cannot hold the value `0`. The domain of `iNn` is
+`MIN..-1` plus `1..MAX`; the domain of `uNn` is `1..MAX`. Non-zero types compile to the same
+representation as their base type — the guarantee is enforced by the compiler:
+
+- Assigning the literal `0` (including `0x0`, `0b0`) is a compile error
+- Implicit conversion from a plain integer type is rejected — the value might be zero; use an
+explicit cast, which is trusted and unchecked at runtime
+- Non-zero values convert implicitly to the plain type
+- Arithmetic results lose the guarantee (`a - a` is zero), so `i32n + i32n` produces `i32`
+- `++`/`--` are rejected on non-zero variables (the result may be zero), and a non-zero
+variable must be initialized when declared
+
+```djinn
+u32n divisor = 10;        // ok
+u32n bad = 0;             // error: integer literal 0 is not assignable to non-zero type 'u32n'
+
+i32 plain = 5;
+i32n fromPlain = plain;   // error: cannot implicitly convert 'i32' to 'i32n'
+i32n trusted = (i32n)plain; // ok: explicit cast is trusted
+
+i32n a = 5;
+i32 sum = a + a;          // ok: result type is i32 (non-zero-ness dropped)
+i32 back = a;             // ok: non-zero flows into the plain type freely
+```
+
+The suffix combines with overflow suffixes in either order: `i32nt`/`i32tn` is a trapped
+non-zero 32-bit signed integer.
+
+### Contracts
+
+Non-zero types integrate with the contracts system in both directions:
+
+- **Non-zero parameters are implicit `require(p != 0)` clauses.** The callee checks the
+parameter at entry (a violation throws `ContractViolation`), and with compile-time error
+enforcement a call passing a constant `0` is rejected by the compiler (`9007`). Inside the
+body the parameter carries the guarantee, so divisions by it skip the zero-divisor check.
+- **`require(p != 0)` upgrades a plain parameter** to non-zero for the whole body: it can be
+assigned to `i32n` variables and used as a proven non-zero divisor. The explicit require is
+folded into the single non-zero entry check.
+- **`ensure(return != 0)` upgrades the return type** to non-zero for callers, regardless of
+declaration order, so `i32n x = try f() ?: 1;` compiles (functions with contracts are
+throwing, hence the `try`).
+
+```djinn
+i32 safeDiv(i32n b) {
+    return 100 / b;   // no zero-divisor check: b is contract-guaranteed non-zero
+}
+
+i32 legacyDiv(i32 b)
+    require(b != 0)   // b is treated as i32n inside the body
+{
+    return 100 / b;
+}
+
+i32 five()
+    ensure(return != 0)
+{
+    return 5;
+}
+
+i32 main() {
+    i32n x = try five() ?: 1;  // ok: ensure proves the result non-zero
+    safeDiv(0);       // compile error: passes zero to non-zero parameter 'b'
+    return 0;
+}
+```
+
+Division and remainder by a proven non-zero divisor (non-zero literal, `i32n` variable,
+contract-proven parameter, or a cast to a non-zero type) emit a plain `sdiv`/`srem` with no
+runtime zero check.
+
