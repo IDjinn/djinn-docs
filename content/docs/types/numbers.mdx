@@ -38,13 +38,12 @@ freely with their fixed-width equivalents (`i64`, `f32`, `f64`).
 
 ## Overflow Modes
 
-Plain integer arithmetic wraps silently on overflow (C-style). Every integer type — and integer
-literals — accept a suffix that selects what happens when an operation overflows:
+Plain integer arithmetic is checked: when `+`, `-`, `*`, unary `-`, `++`/`--` or `/` overflows, the function throws the builtin `Overflow` error if it lists it in `throws(...)` (or has a bare `throws`), and the program stops with a report otherwise. A constant expression that overflows is a compile error. To get another behavior, give the type or the literal a suffix. Every integer type — and integer literals — accept a suffix that selects what happens when an operation overflows:
 
 | Suffix | Mode | Behavior on overflow |
 |--------|------|----------------------|
-| `w` | wrapped | Two's complement wrap (the default, made explicit) |
-| `t` | trapped | Runtime panic — aborts the program |
+| `w` | wrapped | Two's complement wrap, like C. Hashes and random generators need it |
+| `t` | trapped | Always stops the program with a report, even where `Overflow` could be thrown |
 | `c` | checked | Raises the builtin `Overflow` error (requires a `throws` function) |
 | `s` | saturating | Clamps the result to `MIN_VALUE`/`MAX_VALUE` |
 
@@ -101,12 +100,13 @@ i32 main() throws {
 
 Overflow rules also apply to literals and `constexpr`/`consteval` expressions:
 
-- An out-of-range literal is a compile error for `t` and `c` types
+- An out-of-range literal, and arithmetic on constants that overflows, is a compile error unless the literal has the `w` or `s` suffix; the message suggests them
 - Saturating literals clamp at compile time (`i32s a = 3000000000s;` becomes `2147483647`)
 - Wrapped literals keep the C-style truncation
+- `-128` for an `i8` and `-2147483648` for an `i32` are valid: a negative literal is not an overflow
 
 ```djinn
-i32t bad = 3000000000t;  // error: integer literal overflows 'i32t'
+i32 bad = 3000000000;     // error: integer literal does not fit in its type (the w suffix wraps it, the s suffix clamps it)
 i32s clamped = 3000000000s; // ok: value is i32.MAX_VALUE
 i32w wrapped = 3000000000w; // ok: wraps to -1294967296
 ```
@@ -115,6 +115,19 @@ i32w wrapped = 3000000000w; // ok: wraps to -1294967296
 
 The `+`, `-`, `*`, `/`, `%` operators, unary negation (`-x`) and `++`/`--` all honor the overflow
 mode — including the `INT_MIN / -1` edge case for division and remainder.
+
+### Literals
+
+Integer literals accept decimal, hexadecimal (`0x` or `0X`) and binary (`0b` or `0B`) forms, and `_` or `'`
+between digits:
+
+```djinn
+u64 all = 0xFFFF_FFFF_FFFF_FFFF;
+u8 flags = 0b1010_0101;
+i32 billion = 1_000_000_000;
+```
+
+A literal that does not fit its type is a compile error in every base.
 
 ## IEEE 754
 
