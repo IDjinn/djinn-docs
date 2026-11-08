@@ -116,7 +116,6 @@ i32w wrapped = 3000000000w; // ok: wraps to -1294967296
 The `+`, `-`, `*`, `/`, `%` operators, unary negation (`-x`) and `++`/`--` all honor the overflow
 mode — including the `INT_MIN / -1` edge case for division and remainder.
 
-
 ### Literals
 
 Integer literals accept decimal, hexadecimal (`0x` or `0X`) and binary (`0b` or `0B`) forms, and `_` or `'`
@@ -129,6 +128,75 @@ i32 billion = 1_000_000_000;
 ```
 
 A literal that does not fit its type is a compile error in every base.
+
+## IEEE 754
+
+`f32` and `f64` are the IEEE 754 `binary32` and `binary64` formats. Which revision of the standard the
+generated code follows is a compiler setting; the default is the newest one,
+[IEEE 754-2019](https://standards.ieee.org/ieee/754/6210/).
+
+| Setting | Command line | `djinn.proj` (under `compiler:`) |
+| --- | --- | --- |
+| Revision | `--ieee754=2019\|2008\|1985\|none` | `ieee754: "2019"` |
+| Environment | `--fp-env=default\|strict` | `fp-env: "default"` |
+
+Command-line options win over `djinn.proj`.
+
+### Revisions
+
+Every conforming revision gives the same results for `+`, `-`, `*`, `/`, `%`, comparisons and conversions:
+correctly rounded results, subnormal numbers (gradual underflow), signed zeros, infinities and NaN. A
+multiplication followed by an addition is never fused behind your back: `a * b + c` always rounds twice.
+The revisions differ in which operations exist:
+
+| Operation | 1985 | 2008 | 2019 |
+| --- | --- | --- | --- |
+| `a.fma(b, c)` — `a * b + c` with a single rounding | error E3056 | `fusedMultiplyAdd` | `fusedMultiplyAdd` |
+| `a.min(b)` / `a.max(b)` | `a < b ? a : b` | `minNum` / `maxNum` (NaN ignored) | `minimumNumber` / `maximumNumber` |
+| `a.minimum(b)` / `a.maximum(b)` — NaN propagates, `-0 < +0` | error E3056 | error E3056 | yes |
+| `a.minimum_number(b)` / `a.maximum_number(b)` — NaN ignored, `-0 < +0` | error E3056 | error E3056 | yes |
+
+These methods exist on every `f32` and `f64` without importing anything; a method with the same name in
+an `impl f64 { ... }` block takes precedence.
+
+```djinn
+f64 nan = 0.0 / zero;
+f64 a = nan.min(1.0);      // 1.0: minimumNumber ignores the NaN
+f64 b = nan.minimum(1.0);  // NaN: minimum propagates it
+f64 tenth = 0.1;
+f64 c = tenth.fma(10.0, -1.0); // 5.55e-17, while tenth * 10.0 - 1.0 is exactly 0.0
+```
+
+`--ieee754=none` gives up conformance for speed: every float operation gets LLVM's fast-math flags
+(reassociation, contraction into `fma`, no NaN, no infinities, no signed zeros) and subnormals may be
+flushed to zero. Results can change with the optimization level and the target.
+
+### Floating-point environment
+
+With `--fp-env=default` the compiler assumes round-to-nearest-even and that nobody reads the exception
+flags, so it may fold `1.0 / 3.0` at compile time or delete a division whose result is unused.
+
+`--fp-env=strict` gives the program the dynamic attributes of IEEE 754 (rounding direction, clause 4) and
+its status flags (clause 7): every operation uses the rounding mode set at run time and keeps its
+exceptions observable. The generated code uses LLVM's `llvm.experimental.constrained.*` operations and
+the `strictfp` attribute; `<`, `<=`, `>` and `>=` are signaling comparisons and `==`/`!=` are quiet.
+
+```djinn
+extern "C" {
+    i32 fesetround(i32 mode);
+    i32 fetestexcept(i32 flags);
+}
+
+fesetround(FE_UPWARD);     // platform constant: 0x200 on Windows, 0x800 on x86-64 Linux
+f64 third = one / three;   // rounded upward
+```
+
+`strict` needs a conforming revision; `--ieee754=none --fp-env=strict` is rejected.
+
+In the conforming revisions the basic operations (`+`, `-`, `*`, `/`, `%`, `fma`, `min`/`max`, conversions)
+give bit-for-bit identical results on every target, because contraction and reassociation are forbidden
+and each operation rounds exactly as the standard says. Library functions such as `sin` or `pow` come
+from the platform's C library and are not covered by this guarantee.
 
 ## Non-Zero Types
 
@@ -203,3 +271,25 @@ Division and remainder by a proven non-zero divisor (non-zero literal, `i32n` va
 contract-proven parameter, or a cast to a non-zero type) emit a plain `sdiv`/`srem` with no
 runtime zero check.
 
+
+## Booleans
+
+`bool` occupies one byte in memory and only holds `0` or `1`. `&&` and `||` short-circuit; `&`, `|` and `^` always evaluate both sides. Booleans have `==` and `!=`, but no arithmetic and no ordering: `a < b` between two bools is a compile error.
+
+## Disabling an operator
+
+An operator declared without a body inside an `impl` (or a struct) is disabled: using it is a compile error. A type with no declaration for an operator keeps the built-in behavior.
+
+```djinn
+impl bool {
+    operator <(bool left, bool right) -> bool;
+    operator >(bool left, bool right) -> bool;
+}
+
+struct Id {
+    i32 value;
+    operator <(Id left, Id right) -> bool;   // error: operator '<' is disabled for 'Id'
+}
+```
+
+In an `interface` the same form still means "implementers must provide this operator".
