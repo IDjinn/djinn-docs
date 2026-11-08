@@ -155,3 +155,9 @@ void inspect(object obj) {
     }
 }
 ```
+
+## Pointer conversions
+
+A pointer converts implicitly only to a pointer of the same element type, to `void*`, or from `void*`. Any other `T*` to `U*` needs an explicit cast (error `E3054`).
+
+A string literal converts to `str`, `string`, `i8*`, `ptr<i8>` or `void*`, and never to a pointer of another type. When both `str` and a pointer overload exist, `f("text")` picks `str`. A `str` or `string` does not decay to a pointer; call `.toCString()` to get a null-terminated copy.
