@@ -87,6 +87,29 @@ The metadata includes:
 
 The compiler generates `declare` statements for library functions (not `define`) — the actual implementations come from the bitcode during linking. This means zero code duplication.
 
+## `djinnc` Libraries and the Standard Library
+
+`djinnc` builds a `.djlib` as a single file with the compiled object and the Djinn interface of the library (minified source, with the bodies of ordinary functions removed). Consumers keep the full language: macros, operator overloads, attributes, reflection, generics, interfaces, impls, enums, structs and the integer overflow modes all work across the boundary.
+
+```bash
+djinnc lib.djinn --library -o lib.djlib        # build a library (no entry point)
+djinnc app.djinn --lib lib.djlib -o app.exe    # use it (repeat --lib for several)
+djinnc --inspect-lib lib.djlib                 # header, sections and interface
+```
+
+A project lists libraries in `libs:`. A name resolves to `<lib dir>/<name>.djlib`, where the directory comes from `--lib-dir` (default `build/libs`).
+
+### The standard library as a `.djlib`
+
+`--std` (or `std` in `libs:`) links `<lib dir>/std.djlib` when that file exists, so the program does not compile `std/` again. Only the code of your program is generated, and calls into `std` resolve to the library, like a call into libc. `--run` and `--check` use it too. When `std.djlib` is missing, `std` is compiled from source.
+
+```bash
+bash tools/build_std.sh djinnc build/libs/std.djlib --runtime-dir runtime --runtime-lib <runtime lib>
+djinnc app.djinn --std --lib-dir build/libs -o app.exe
+```
+
+Generic instances, `constexpr` functions and macros stay in the interface, so they are still expanded in your program. The `std` object is linked whole; removing unused functions is tracked in the issue tracker.
+
 ## `.ll` Libraries (Legacy)
 
 Raw LLVM IR linking is still supported for advanced use cases.
