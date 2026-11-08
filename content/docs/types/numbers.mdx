@@ -189,3 +189,25 @@ Division and remainder by a proven non-zero divisor (non-zero literal, `i32n` va
 contract-proven parameter, or a cast to a non-zero type) emit a plain `sdiv`/`srem` with no
 runtime zero check.
 
+
+## Booleans
+
+`bool` occupies one byte in memory and only holds `0` or `1`. `&&` and `||` short-circuit; `&`, `|` and `^` always evaluate both sides. Booleans have `==` and `!=`, but no arithmetic and no ordering: `a < b` between two bools is a compile error.
+
+## Disabling an operator
+
+An operator declared without a body inside an `impl` (or a struct) is disabled: using it is a compile error. A type with no declaration for an operator keeps the built-in behavior.
+
+```djinn
+impl bool {
+    operator <(bool left, bool right) -> bool;
+    operator >(bool left, bool right) -> bool;
+}
+
+struct Id {
+    i32 value;
+    operator <(Id left, Id right) -> bool;   // error: operator '<' is disabled for 'Id'
+}
+```
+
+In an `interface` the same form still means "implementers must provide this operator".
