@@ -31,6 +31,8 @@ nfloat ratio = 1.5;
 ndouble precise = 2.718281828;
 ```
 
+`usize` and `isize` have a fixed width of 32 bits on every target; use `nint` for the pointer width.
+
 Native types are display names: `typeof` and diagnostics show `nint`, and they interoperate
 freely with their fixed-width equivalents (`i64`, `f32`, `f64`).
 
@@ -64,6 +66,20 @@ i32w c = 2000w + 3w;  // wrapping add (mode from the literals)
 i32s d = 2000000000s;
 i32s e = d + d;       // saturates at i32.MAX_VALUE = 2147483647
 ```
+
+### Status in `djinnc`
+
+The self-hosted compiler implements `w`, `t`, `c` and `s` for `+`, `-`, `*`, unary `-`, `++`/`--` and
+`/` (saturating `MIN / -1` gives `MAX_VALUE`). A conflicting pair of modes is error `E3055`.
+The `c` mode throws the core `Overflow` error and needs `throws(Overflow)` or a bare `throws`;
+catch it with `try ... ?: fallback` or `switch`.
+
+Integer division and remainder by zero throw the core `DivisionByZero` error when the enclosing
+function lists it in `throws(...)` (or has a bare `throws`); anywhere else the program stops with
+a report. Float division by zero follows IEEE 754 (infinity or NaN), also in `constexpr`.
+
+An explicit cast that narrows an integer stops the program when the value does not fit
+(`(u8)x` with `x = 300`), and `(bool)value` accepts only `0` or `1`.
 
 ### Checked overflow
 
