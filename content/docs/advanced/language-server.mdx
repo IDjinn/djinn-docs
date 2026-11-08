@@ -1,0 +1,48 @@
+---
+title: Language Server
+---
+
+`djinn-lsp` is the language server for `djinnc`. It is a separate executable, written in Djinn, that speaks the Language Server Protocol over stdio, and it is what the VS Code extension in `tools/vscode-djinn` talks to.
+
+## Features
+
+- Diagnostics: the lexical lint shows immediately, then the real compiler errors from `djinnc --check` replace it. Unsaved buffers are checked as they are, without saving.
+- Hover, go to definition, go to type definition, find references, document highlights.
+- Rename, with prepare-rename.
+- Completion for members (`.`), `::` scopes, imports, locals, globals, keywords and types.
+- Signature help.
+- Document and workspace symbols, and folding ranges.
+- Semantic highlighting for identifiers and builtin types.
+- Doc comments (`///` and `/** */`) in hover and completion.
+
+Symbol navigation uses its own tolerant scanner, not the compiler, so it keeps working while the file has errors. Member lookups follow the inferred type of the receiver; when it cannot be inferred, references and rename skip that access.
+
+## Building
+
+```bash
+djinn-lsp/build.sh <djinnc> [runtime dir]
+```
+
+This produces `djinn-lsp/build/djinn-lsp` (`.exe` on Windows). The compiler used to build it needs `--check` support for the diagnostics.
+
+## How the compiler check runs
+
+The server finds the nearest `djinn.proj` above the file and runs `djinnc` on that project's `sources`, `libs` and `library-mode`, with `--check --diagnostics-format=json`. A file outside any project is checked on its own with `--std`. Checks are debounced and are cancelled when new input arrives.
+
+## Settings
+
+The client passes these as `initializationOptions` and `workspace/didChangeConfiguration`:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `compilerPath` | discovered | `djinnc` with `--check` support. Also read from `DJINNC`. |
+| `runtimeDir` | discovered | Folder that contains `core/`. Also read from `DJINN_RUNTIME_DIR`. |
+| `stdDir` | `../std` of the runtime | Standard library. Also read from `DJINN_STD_DIR`. |
+| `checkOnChange` | `true` | When `false`, the compiler runs on open and save only. |
+| `debounceMs` | `500` | Quiet time before the compiler check runs. |
+
+The server also answers a custom `djinn/info` request with the compiler, runtime and std it settled on, and the number of indexed files.
+
+## VS Code
+
+The extension in `tools/vscode-djinn` starts the server and adds `Djinn: Build`, `Djinn: Build and Run`, `Djinn: Check Project` and `Djinn: Restart Language Server`, plus a `djinn` task type and a `$djinnc` problem matcher. Settings are under `djinn.*`.
