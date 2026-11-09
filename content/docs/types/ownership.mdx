@@ -119,3 +119,16 @@ string joined = owned + owned;   // operators borrow their operands
 
 `T* p = &x;` borrows `x` until `p` leaves scope. While the borrow is live, `x` cannot be assigned or moved, and a second
 borrow of a `mut` variable is an error. Only a declaration initialized directly with `&x` is tracked.
+
+## owner
+
+`owner<T>` (namespace `std::memory`) is a unique owner of one heap value. It is a Value, so it moves, and it is
+`Disposable`: at the end of its scope the owned value is disposed first (when `T` needs it) and then the memory is freed.
+
+```djinn
+import std::memory;
+
+owner<Point> boxed = owner<Point>({ .x = 3, .y = 4 });
+Point* point = boxed.get();   // borrow, valid while boxed is alive
+```
+
