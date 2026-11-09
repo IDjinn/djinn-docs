@@ -144,3 +144,16 @@ import std::memory;
 shared<Config> first = shared<Config>({ .level = 2 });
 shared<Config> second = first.clone();   // references() == 2
 ```
+
+## Views
+
+`str` and `arr<T>` are Trivial views: copying one copies a pointer and a length, not the data. A view initialized from an
+owning value (`str view = text;`, or a method that returns a view such as `text.slice(1, 3)`) borrows it. The owner is not
+moved, but it cannot be moved, reassigned or returned while the view is in scope (`E5003`), and a view of a local cannot be
+returned from its function (`E5006`).
+
+```djinn
+string text = "hello";
+str view = text;
+string other = text;   // error: cannot move 'text' while it is borrowed by 'view'
+```
