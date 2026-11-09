@@ -133,7 +133,7 @@ array<i32> nums = array<i32>();
     { cells: [<code>length() → size</code>, 'Returns the number of elements.'] },
     { cells: [<code>reserve(size capacity)</code>, 'Pre-allocates memory for at least the given capacity.'] },
     { cells: [<code>hash() → u64</code>, 'Computes a hash over all elements.'] },
-    { cells: [<code>destroy()</code>, 'Frees the underlying memory.'] },
+    { cells: [<code>disposable()</code>, 'Frees the underlying memory. Called automatically when the array goes out of scope.'] },
   ]}
 />
 
@@ -153,7 +153,6 @@ i32 main() {
     i32 second = nums.get(1u);  // 20
     nums.set(0u, 99);
 
-    nums.destroy();
     return second;
 }
 ```
@@ -197,7 +196,7 @@ map<i32, i32> m = map<i32, i32>();  // initial capacity: 16
     { cells: [<code>remove(Key key) → bool</code>, 'Removes the entry for the given key. Returns true if it existed.'] },
     { cells: [<code>length() → size</code>, 'Returns the number of entries.'] },
     { cells: [<code>hash() → u64</code>, 'Computes a hash over all keys.'] },
-    { cells: [<code>destroy()</code>, 'Frees all underlying memory (keys, values, states).'] },
+    { cells: [<code>disposable()</code>, 'Frees all underlying memory (keys, values, states). Called automatically when the map goes out of scope.'] },
   ]}
 />
 
@@ -218,7 +217,6 @@ i32 main() {
 
     scores.remove(3);
 
-    scores.destroy();
     return val;
 }
 ```

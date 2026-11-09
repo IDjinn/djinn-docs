@@ -1,0 +1,104 @@
+---
+title: Ownership
+---
+
+Every type has a category that decides what `T b = a;` does and when its resources are released. The compiler derives
+the category from the type, so there is nothing to annotate.
+
+| Category | Assignment `b = a` | Examples |
+|---|---|---|
+| Trivial | Copies. `a` stays valid. | integers, floats, `bool`, pointers, `str`, `arr<T>`, structs made only of trivial fields |
+| Value | Moves. `a` is no longer usable. | any struct that implements `Disposable`, or holds a field that does |
+
+A struct is Trivial when none of its fields needs disposal and it does not implement `Disposable`. Adding a `Disposable`
+field to a Trivial struct turns it into a Value.
+
+```djinn
+struct Point { i32 x; i32 y; }
+
+Point a = { 1, 2 };
+Point b = a;        // copy
+i32 sum = a.x + b.x;
+```
+
+## Disposable
+
+A type that owns a resource implements `Disposable`. The compiler calls `disposable()` when the owning variable goes out
+of scope, in reverse order of declaration.
+
+```djinn
+import std::types::constraints;
+
+struct File : Disposable {
+    i32 handle;
+
+    public void disposable() {
+        close(this.handle);
+    }
+}
+
+i32 main() {
+    File first = { .handle = open("a.txt") };
+    File second = { .handle = open("b.txt") };
+    return 0;
+}   // second is closed, then first
+```
+
+A struct without its own `disposable()` releases its `Disposable` fields, last field first.
+
+### When the call happens
+
+- At the end of the block that declares the variable.
+- Before `return`, `throw` and an error propagated with `try`.
+- On `break` and `continue`, for the variables declared inside the loop body.
+- When the variable is assigned again: the previous value is disposed first.
+
+### Moves
+
+A move transfers the responsibility to the destination, so the source is not disposed.
+
+```djinn
+File a = { .handle = open("a.txt") };
+File b = a;         // a is moved, only b is disposed
+```
+
+A local is moved when it initializes a variable, is assigned, is returned, or is used as a field value in a struct
+initializer. Using it afterwards is error `E5001`. Assigning to it again re-initializes it.
+
+Like in Rust, the disposal is decided at compile time. A drop flag is only generated for a variable that is moved or
+declared without an initializer; every other variable is disposed with a plain call.
+
+## Cloneable
+
+`Cloneable<T>` is the interface for an explicit deep copy:
+
+```djinn
+struct Buffer : Disposable, Cloneable<Buffer> {
+    i8* data;
+    size length;
+
+    public Buffer clone() { /* allocate and copy */ }
+    public void disposable() { free(this.data); }
+}
+
+Buffer b = a.clone();
+```
+
+## Standard library
+
+`array<T>` and `map<Key, Value>` implement `Disposable`, so they free their memory at the end of the scope and no longer
+need a `destroy()` call. `string` is not `Disposable` yet.
+
+## Limits
+
+- Passing a value to a function does not move it. The callee gets a bitwise copy and must not keep or dispose it.
+- Temporaries that are never stored in a variable are not disposed.
+- A value moved into a container, or into a field of an existing variable, is not tracked.
+- A `Disposable` constructed by a generic instance whose `disposable()` is never instantiated is skipped.
+- Variables declared in the initializer of a `for` live until the end of the enclosing block.
+- A coroutine cancelled while suspended does not dispose its locals.
+
+## Borrows
+
+`T* p = &x;` borrows `x` until `p` leaves scope. While the borrow is live, `x` cannot be assigned or moved, and a second
+borrow of a `mut` variable is an error. Only a declaration initialized directly with `&x` is tracked.
