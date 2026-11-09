@@ -8,7 +8,7 @@ the category from the type, so there is nothing to annotate.
 | Category | Assignment `b = a` | Examples |
 |---|---|---|
 | Trivial | Copies. `a` stays valid. | integers, floats, `bool`, pointers, `str`, `arr<T>`, structs made only of trivial fields |
-| Value | Moves. `a` is no longer usable. | any struct that implements `Disposable`, or holds a field that does |
+| Value | Moves. `a` is no longer usable. | `string`, `array<T>`, `map`, any struct that implements `Disposable`, or holds a field that does |
 
 A struct is Trivial when none of its fields needs disposal and it does not implement `Disposable`. Adding a `Disposable`
 field to a Trivial struct turns it into a Value.
@@ -62,8 +62,16 @@ File a = { .handle = open("a.txt") };
 File b = a;         // a is moved, only b is disposed
 ```
 
-A local is moved when it initializes a variable, is assigned, is returned, or is used as a field value in a struct
-initializer. Using it afterwards is error `E5001`. Assigning to it again re-initializes it.
+A local is moved when it initializes a variable, is assigned to a variable, a field or an index, is returned, is used as a
+field value in a struct initializer, or is passed by value to a function. Using it afterwards is error `E5001`. Assigning
+to it again re-initializes it.
+
+### Parameters
+
+A parameter of a Value type owns its argument: the caller moves the value in, and the function disposes it at the end
+unless it moves it on (returns it, stores it in a field, passes it along). To only look at a value, take a `str` or a
+pointer instead. Extern functions, operators and property accessors only borrow their parameters, so calling them does
+not move the argument.
 
 Like in Rust, the disposal is decided at compile time. A drop flag is only generated for a variable that is moved or
 declared without an initializer; every other variable is disposed with a plain call.
@@ -86,12 +94,21 @@ Buffer b = a.clone();
 
 ## Standard library
 
-`array<T>` and `map<Key, Value>` implement `Disposable`, so they free their memory at the end of the scope and no longer
-need a `destroy()` call. `string` is not `Disposable` yet.
+`array<T>`, `map<Key, Value>` and `string` implement `Disposable`, so they free their memory at the end of the scope and
+no longer need a `destroy()` call.
+
+`string` always owns a heap buffer: `string s = "abc"` copies the literal. `str` is a view and can point to static
+memory, so a literal typed `str` allocates nothing and a `string` can be viewed as a `str` without a copy.
+
+```djinn
+str view = "abc";           // static, no allocation
+string owned = "abc";       // heap copy, freed at the end of the scope
+string joined = owned + owned;   // operators borrow their operands
+```
 
 ## Limits
 
-- Passing a value to a function does not move it. The callee gets a bitwise copy and must not keep or dispose it.
+- Passing through a property setter, an operator or an extern function does not move the value.
 - Temporaries that are never stored in a variable are not disposed.
 - A value moved into a container, or into a field of an existing variable, is not tracked.
 - A `Disposable` constructed by a generic instance whose `disposable()` is never instantiated is skipped.
