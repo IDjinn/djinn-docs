@@ -17,6 +17,10 @@ extern "C" {
 
 These are linked at compile time against the C standard library.
 
+## Redeclaring an Extern
+
+Declaring the same extern function twice (for example `strlen`, which the standard library already declares) is allowed when the declarations match: it only reports a warning (`E6002`) and the first declaration is kept. A redeclaration with a different return type, different parameter types or a different variadic flag is an error (`E3003`). Pointer types are compared by ABI, so `void*`, `i8*` and `ptr<i8>` count as the same type.
+
 ## Calling Extern Functions
 
 Extern functions are called like regular Djinn functions:
