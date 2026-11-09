@@ -9,6 +9,7 @@ title: Language Server
 - Diagnostics: the lexical lint shows immediately, then the real compiler errors from `djinnc --check` replace it. Unsaved buffers are checked as they are, without saving.
 - Hover, go to definition, go to type definition, find references, document highlights.
 - Rename, with prepare-rename.
+- "Did you mean" quick fixes for misspelled variables, functions, members and types. A suggestion is made only when one name in scope is clearly the closest (one edit away, two for long names), so a plain unknown name gets no hint.
 - Completion for members (`.`), `::` scopes, imports, locals, globals, keywords and types.
 - Signature help.
 - Document and workspace symbols, and folding ranges.
@@ -23,7 +24,7 @@ Symbol navigation uses its own tolerant scanner, not the compiler, so it keeps w
 djinn-lsp/build.sh <djinnc> [runtime dir]
 ```
 
-This produces `djinn-lsp/build/djinn-lsp` (`.exe` on Windows). The compiler used to build it needs `--check` support for the diagnostics.
+This builds the runtime library (it needs `clang` and `llvm-ar` or `ar`, because the JSON parsing comes from the runtime's yyjson through `std::util::Json`) and then `djinn-lsp/build/djinn-lsp` (`.exe` on Windows). The compiler used to build it must be recent enough to compile `std`. The compiler it runs for diagnostics needs `--check` support.
 
 ## How the compiler check runs
 
