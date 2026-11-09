@@ -132,3 +132,15 @@ owner<Point> boxed = owner<Point>({ .x = 3, .y = 4 });
 Point* point = boxed.get();   // borrow, valid while boxed is alive
 ```
 
+## shared
+
+`shared<T>` (namespace `std::memory`) is a reference-counted owner. The count is atomic, so handles can be released from
+different threads. `clone()` returns a new handle and increments the count; each handle is a Value and releases one
+reference at the end of its scope. When the last handle goes away, the value is disposed and the memory is freed.
+
+```djinn
+import std::memory;
+
+shared<Config> first = shared<Config>({ .level = 2 });
+shared<Config> second = first.clone();   // references() == 2
+```
