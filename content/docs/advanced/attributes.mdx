@@ -145,7 +145,7 @@ i32 triangle(i32 n) {
 }
 ```
 
-A `[Pure]` function can write local variables and fields of local structs. It cannot write through a pointer, an index or a global, and it can only call other `[Pure]` functions, including `[Pure]` externs and functions from a library. Breaking a rule reports `E3057`.
+A `[Pure]` function can write local variables and fields of local structs. It cannot write through a pointer, an index or a global. It can call any function the compiler infers to be clean (no write outside locals, no native code, no `await`), directly or through other calls, and `[Pure]` externs. Native and library functions that are not `[Pure]` count as unknown. Breaking a rule reports `E3057`.
 
 ## Struct Attributes
 

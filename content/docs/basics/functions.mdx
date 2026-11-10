@@ -133,7 +133,7 @@ i32 transfer(Account* from, Account* to, i64 amount) throws(AuditFailed) {
 - Each operand is a variable, field, element or dereference of a plain copyable value (no `string`, arrays or disposable types). Anything else reports `E3058`.
 - Only the listed values are restored; writes elsewhere are not undone.
 - An error handled inside the region does not roll it back.
-- `await` and `spawn` are not allowed inside the region (`E3059`): no other task can run while it is open, so no one sees the half-done update.
+- `await` and `spawn` are not allowed inside the region (`E3059`), and neither is calling a function that can reach an `await` (the compiler infers this through the whole call chain). Calling an `async` function without awaiting it is fine. No other task can run while the region is open, so no one sees the half-done update.
 
 ### `after_commit`
 
