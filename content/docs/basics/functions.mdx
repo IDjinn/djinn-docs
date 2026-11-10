@@ -148,3 +148,29 @@ atomic(account.balance) {
 ```
 
 The block runs outside the region, so a failure there does not undo the update and `await` is allowed in it. Delivery is best effort: if the process dies between the update and the block, the block never runs.
+
+## Unit of work (`uow`)
+
+A `uow` declaration bundles clauses that several functions share. It can hold `require`, `ensure`, one `atomic(...)` operand list and an `after_commit` block. A function applies it with `uow(Name)` after its signature (and after its own clauses).
+
+```djinn
+uow Transfer {
+    require(amount > 0)
+    ensure(from.balance + to.balance == old(from.balance) + old(to.balance))
+    atomic(*from, *to)
+    after_commit {
+        *notified = *notified + 1;
+    }
+}
+
+i32 transfer(Account* from, Account* to, i64 amount, i32* notified) throws(Failed) uow(Transfer) {
+    from.balance = from.balance - amount;
+    try audit(amount);
+    to.balance = to.balance + amount;
+    return 0;
+}
+```
+
+- The clauses are copied into each function, so they refer to the function's parameters by name (and to `result`). A function that does not have those parameters fails to compile.
+- The body runs inside the `atomic` region, and the function's own clauses are added to the shared ones.
+- A `uow` must be declared before the functions that use it, in the same file or library.
