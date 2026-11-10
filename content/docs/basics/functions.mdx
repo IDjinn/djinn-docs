@@ -113,3 +113,22 @@ i32 clamp(i32 n) require(n > -1000) ensure(result >= 0) ensure(result <= 10) {
 - `require(cond)` is checked on entry and sees the parameters.
 - `ensure(cond)` is checked on every `return`; `result` names the returned value (not available in `void` functions). A `throw` skips it.
 - Contracts are part of the body, so they do not cross a `.djlib` boundary.
+
+## Atomic regions
+
+`atomic(a, b) { ... }` saves the listed values on entry. If the function leaves the region with an error (`throw`, or a failed `try`), the values are restored before the error is returned; a normal exit keeps the changes.
+
+```djinn
+i32 transfer(Account* from, Account* to, i64 amount) throws(AuditFailed) {
+    atomic(*from, *to) {
+        from.balance = from.balance - amount;
+        try audit(amount);
+        to.balance = to.balance + amount;
+    }
+    return 0;
+}
+```
+
+- Each operand is a variable, field, element or dereference of a plain copyable value (no `string`, arrays or disposable types). Anything else reports `E3058`.
+- Only the listed values are restored; writes elsewhere are not undone.
+- An error handled inside the region does not roll it back.
