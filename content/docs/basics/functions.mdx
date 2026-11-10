@@ -97,3 +97,19 @@ consteval i32 hash_seed(i32 x) {
 ```
 
 See [Compile-Time Evaluation](/docs/constexpr) for full details.
+
+## Contracts
+
+`require` and `ensure` clauses go after the signature (and after `throws`). A false condition traps with a panic report.
+
+```djinn
+i32 clamp(i32 n) require(n > -1000) ensure(result >= 0) ensure(result <= 10) {
+    if (n < 0) { return 0; }
+    if (n > 10) { return 10; }
+    return n;
+}
+```
+
+- `require(cond)` is checked on entry and sees the parameters.
+- `ensure(cond)` is checked on every `return`; `result` names the returned value (not available in `void` functions). A `throw` skips it.
+- Contracts are part of the body, so they do not cross a `.djlib` boundary.
