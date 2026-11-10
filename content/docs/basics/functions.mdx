@@ -133,3 +133,17 @@ i32 transfer(Account* from, Account* to, i64 amount) throws(AuditFailed) {
 - Only the listed values are restored; writes elsewhere are not undone.
 - An error handled inside the region does not roll it back.
 - `await` and `spawn` are not allowed inside the region (`E3059`): no other task can run while it is open, so no one sees the half-done update.
+
+### `after_commit`
+
+An atomic region can be followed by an `after_commit` block. It runs once the region has finished normally: when the block ends, and also on `return`, `break` and `continue` that leave the region. It does not run when an error leaves the region.
+
+```djinn
+atomic(account.balance) {
+    account.balance = account.balance - amount;
+} after_commit {
+    notify(account);
+}
+```
+
+The block runs outside the region, so a failure there does not undo the update and `await` is allowed in it. Delivery is best effort: if the process dies between the update and the block, the block never runs.
