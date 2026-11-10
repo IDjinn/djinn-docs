@@ -174,3 +174,24 @@ i32 transfer(Account* from, Account* to, i64 amount, i32* notified) throws(Faile
 - The clauses are copied into each function, so they refer to the function's parameters by name (and to `result`). A function that does not have those parameters fails to compile.
 - The body runs inside the `atomic` region, and the function's own clauses are added to the shared ones.
 - A `uow` must be declared before the functions that use it, in the same file or library.
+
+## Listing the guarantees
+
+`djinnc --obligations` prints every guarantee the compiler tracks after a successful check:
+
+```text
+obligations:
+  bank.djinn:4:5   require            checked      withdraw
+  bank.djinn:16:86 atomic.rollback    enforced     withdraw
+  bank.djinn:16:86 atomic.no_suspend  proved       withdraw
+  bank.djinn:6:18  after_commit       best_effort  withdraw
+  bank.djinn:12:1  pure               proved       twice
+summary: 2 proved, 1 enforced, 1 checked, 1 best_effort
+```
+
+- `proved`: shown statically by the compiler (`[Pure]`, an `atomic` region that cannot suspend).
+- `enforced`: the compiler installs a run-time protocol (the `atomic` rollback).
+- `checked`: tested when the code runs and traps if false (`require`, `ensure`).
+- `best_effort`: no guarantee if the process dies (`after_commit`).
+
+Clauses that come from a `uow` point at the `uow` declaration.
