@@ -23,6 +23,22 @@ import std::filesystem;
 
 `Directory`, `File` and `DirEntries` are `Disposable`: they close when they go out of scope.
 
+## Async and sync
+
+Every operation that touches the disk is `async`: the call is queued on a worker pool in the runtime and the coroutine
+suspends until the worker finishes, so the scheduler never blocks on the filesystem.
+
+```djinn
+result<File, FsError> file = await dir.open_file(path, OpenOptions.read());
+```
+
+The blocking versions have the same name with a `_sync` suffix (`open_file_sync`, `read_to_string_sync`,
+`sync_sync`...) and run on the calling thread. `Path`, `OpenOptions`, `Metadata` and `DirEntries.next` do no I/O and are
+plain functions.
+
+A pending request holds raw pointers to the `Path` text and to read/write buffers, so keep them alive across the `await`.
+The tables below list the async names; add `_sync` for the blocking one.
+
 ## Path
 
 ```djinn
@@ -123,17 +139,17 @@ Path parsed(str text) {
     return switch Path.parse(text) { Ok p -> p, Error e -> Path.unchecked("x", false) };
 }
 
-i32 main() {
-    result<Directory, FsError> opened = Directory.open_root(parsed("."));
+async i32 main() {
+    result<Directory, FsError> opened = await Directory.open_root(parsed("."));
     return switch opened {
-        Ok root -> save(&root),
+        Ok root -> await save(&root),
         Error e -> 1
     };
 }
 
-i32 save(Directory* root) {
-    root.create_dir_all(parsed("out"));
-    result<bool, FsError> done = root.write_atomic(parsed("out/report.txt"), "ready");
+async i32 save(Directory* root) {
+    result<bool, FsError> made = await root.create_dir_all(parsed("out"));
+    result<bool, FsError> done = await root.write_atomic(parsed("out/report.txt"), "ready");
     return switch done { Ok v -> 0, Error e -> 2 };
 }
 ```
@@ -158,5 +174,5 @@ code. The namespace is not called `unsafe` because that is a keyword.
 
 - `open_root` resolves its path as a string, so links in its leading components are followed; only the last
   component is checked.
-- Listings are read in full, and calls block.
+- Listings are read in full. The worker pool has a fixed size of 4 threads.
 - There is no owned path type or `join` yet.
