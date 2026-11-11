@@ -25,8 +25,11 @@ import std::filesystem;
 
 ## Async and sync
 
-Every operation that touches the disk is `async`: the call is queued on a worker pool in the runtime and the coroutine
-suspends until the worker finishes, so the scheduler never blocks on the filesystem.
+Every operation that touches the disk is `async`. `read` and `write` use the operating system's asynchronous I/O (IOCP
+on Windows, io_uring on Linux) and the coroutine resumes when the transfer completes. Open, stat, mkdir, rename, remove,
+listing and sync have no asynchronous form in the OS, so they run on a worker pool in the runtime that resumes the
+coroutine when the call returns. Kernels without io_uring, and macOS, run reads and writes on the pool as well. The
+scheduler never blocks on the filesystem.
 
 ```djinn
 result<File, FsError> file = await dir.open_file(path, OpenOptions.read());
@@ -174,5 +177,5 @@ code. The namespace is not called `unsafe` because that is a keyword.
 
 - `open_root` resolves its path as a string, so links in its leading components are followed; only the last
   component is checked.
-- Listings are read in full. The worker pool has a fixed size of 4 threads.
+- Listings are read in full. Operations other than `read` and `write` share a worker pool of 4 threads.
 - There is no owned path type or `join` yet.
