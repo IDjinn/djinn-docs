@@ -111,6 +111,61 @@ async i32 pipeline(i32 x) {
 // pipeline(5) -> step2(5) -> step1(5) = 15 -> 30 -> 35
 ```
 
+## Async functions that never suspend
+
+An `async` function only needs a coroutine when it can actually suspend. The compiler checks every async function and
+compiles it as a plain synchronous function when its body has no suspension point:
+
+- no `std::builtin::coro.suspend()` or `coro.handle()`, and no runtime async I/O call (`Console`, `Socket`,
+  `std::filesystem`, `Task.delay`...);
+- no `spawn`;
+- every `await` is a direct call to a function that never suspends either. This is decided over the whole call graph,
+  so a chain of such functions is converted together.
+
+`await f()` on a converted function becomes an ordinary call: no coroutine frame is allocated and the scheduler is not
+involved. The result and the errors of a `throws` function reach the caller exactly as through the task. The compiler
+reports warning `E6004` on the function, because `async` has no effect there:
+
+```djinn
+async i32 leaf(i32 x) {      // warning E6004: 'async' has no effect, compiled as a synchronous function
+    return x + 1;
+}
+
+async i32 middle(i32 x) {    // warning E6004: it only awaits 'leaf'
+    i32 value = await leaf(x);
+    return value * 2;
+}
+
+async i32 waits(i32 x) {     // stays async: Task.delay suspends
+    await Task.delay(10);
+    return await leaf(x);    // a direct call
+}
+```
+
+A function keeps its coroutine, and gets no warning, when the task itself can be observed:
+
+<Table
+    columns={[
+        {header: 'Case', width: 'w-1/3'},
+        {header: 'Why it stays async'},
+    ]}
+    rows={[
+        {cells: ['Recursion', 'A function that calls itself, directly or through other functions, keeps its frames on the heap. As a plain function each level would use the native stack, so a deep recursion could overflow it.']},
+        {cells: ['The task is used', '`spawn f()`, storing `f()` in a `task<T>`, passing it along or taking a reference to the function all need the coroutine handle.']},
+        {cells: ['`async main`', 'The entry point is always driven by the event loop.']},
+        {cells: ['Libraries', 'A function compiled with `--library` keeps the task ABI, so `.djlib` consumers are unaffected.']},
+        {cells: ['Instance methods, methods of reflected types, attributed functions, generics', 'They can be reached through reflection, interfaces or exported symbols, so the coroutine ABI is kept. Static methods of types that are not reflected are converted like free functions.']},
+    ]}
+/>
+
+Converting removes the scheduler round trip of each await, so a converted call runs to completion before any other
+ready task, while an await of a coroutine lets ready tasks (for example spawned ones) run first. In a synchronous
+function, an await of a converted function does not run the event loop either: tasks spawned earlier only run at the
+next await that really waits on a coroutine.
+
+The conversion does not depend on the optimization level: `-O0`, `-O2` and `--run` behave the same. Pass
+`--no-async-elision` to keep every `async` function a coroutine (no conversion and no `E6004`).
+
 ## Async Main
 
 When `main` is declared as `async`, the compiler automatically generates:
