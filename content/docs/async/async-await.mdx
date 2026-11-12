@@ -149,6 +149,19 @@ Djinn's async implementation uses LLVM's native coroutine intrinsics (`coro.id`,
 
 For simple "compute and return" async functions where the result is immediately awaited, the optimizer can eliminate **all** coroutine overhead — no malloc, no frame, no indirect calls.
 
+## Frame Memory
+
+Coroutines are stackless, as in C++20: the only state that outlives a suspension is the coroutine frame, which holds the
+locals that live across an `await`. When CoroElide cannot place the frame in the caller, it comes from
+`__djinn_coro_alloc(size)` and goes back through `__djinn_coro_free(frame, size)`. The runtime keeps freed frames in
+size classes of 64 bytes (up to 2 KiB, 64 frames per class) and hands them out again, so a program that keeps awaiting
+reuses the same few frames instead of calling `malloc` for each call. Larger frames go straight to `malloc`/`free`.
+
+The scheduler itself does not allocate per operation: the ready queue is a ring buffer and the "who is waiting on whom"
+state (the continuation of an awaited coroutine and the waiting flag) lives in an open-addressing table keyed by the
+coroutine handle. Both grow by doubling, so an `await` costs no allocation once they reach their working size, and there
+is no limit on how many coroutines wait at the same time.
+
 ## Implementation Details
 
 Each `async` function generates the following LLVM IR structure:
@@ -162,7 +175,7 @@ entry:
 
 coro.alloc:
   %size = call i64 @llvm.coro.size.i64()
-  %mem  = call ptr @malloc(i64 %size)
+  %mem  = call ptr @__djinn_coro_alloc(i64 %size)
   br label %coro.begin
 
 coro.begin:
@@ -177,7 +190,7 @@ coro.final:
 
 coro.cleanup:
   %free.mem = call ptr @llvm.coro.free(token %id, ptr %hdl)
-  call void @free(ptr %free.mem)
+  call void @__djinn_coro_free(ptr %free.mem, i64 %size)
 
 coro.suspend:
   call void @llvm.coro.end(ptr %hdl, ...)
