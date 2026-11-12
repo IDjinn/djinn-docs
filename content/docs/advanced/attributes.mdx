@@ -224,6 +224,14 @@ The compiler automatically applies certain LLVM attributes based on language sem
 | Attribute | Applied To | Reason |
 |-----------|-----------|--------|
 | `nounwind` | All Djinn functions | Djinn has no exception mechanism |
+| `mustprogress` | Functions proven to finish | No loop, no recursion, no suspension, and every call reaches only such functions |
+
+`mustprogress` lets LLVM assume a function returns or acts observably, so it may remove a call whose result is unused.
+The compiler only adds it where it can prove it: a function with a `while`, `do`/`while` or `for` loop, a recursion, a
+`spawn`, an `async` body, a call to an `extern` function or to a library function, string interpolation, boxing into
+`object`, reflection, or a value that needs `destroy()` never gets it, and neither does any function that calls one of
+those. `willreturn` is never implied, because a panic (overflow, bounds check) ends the process instead of returning;
+write `[WillReturn]` yourself when that is what you mean.
 
 ## Multiple Attributes
 

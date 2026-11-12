@@ -150,13 +150,59 @@ A function keeps its coroutine, and gets no warning, when the task itself can be
         {header: 'Why it stays async'},
     ]}
     rows={[
-        {cells: ['Recursion', 'A function that calls itself, directly or through other functions, keeps its frames on the heap. As a plain function each level would use the native stack, so a deep recursion could overflow it.']},
+        {cells: ['Recursion', 'A function that calls itself, directly or through other functions, keeps its frames on the heap. As a plain function each level would use the native stack, so a deep recursion could overflow it. Tail-recursive cycles are the exception, see below.']},
         {cells: ['The task is used', '`spawn f()`, storing `f()` in a `task<T>`, passing it along or taking a reference to the function all need the coroutine handle.']},
         {cells: ['`async main`', 'The entry point is always driven by the event loop.']},
         {cells: ['Libraries', 'A function compiled with `--library` keeps the task ABI, so `.djlib` consumers are unaffected.']},
         {cells: ['Instance methods, methods of reflected types, attributed functions, generics', 'They can be reached through reflection, interfaces or exported symbols, so the coroutine ABI is kept. Static methods of types that are not reflected are converted like free functions.']},
     ]}
 />
+
+### Tail-recursive cycles
+
+A recursion is converted when it can run in constant stack: every call from one member of the cycle to another is
+`return await g(...)`, so codegen turns it into a guaranteed tail call (LLVM `musttail`) and no level stays on the
+stack. The whole cycle is converted or none of it, and only when all of these hold:
+
+- no member suspends (the same rules as above) and every other `await` targets a function that never suspends;
+- every call inside the cycle is `return await g(...)` with exactly the same signature: return type, `throws` list and
+  parameter types;
+- every parameter and the return type is a scalar (integer, float, `char` or `bool`) of at most 64 bits, so every value
+  travels in registers: no argument can point into the frame that the tail call replaces, and no result comes back
+  through a hidden pointer, which LLVM cannot tail call;
+- a `throws` member lists its errors explicitly (not `throws` alone), and each error is a plain struct of at most two
+  such scalars without a custom `[Align]`, so the result record also fits in registers;
+- no member has a parameter or local that needs a `destroy()` / `Disposable` cleanup, which would have to run after the
+  call;
+- the cycle has a base case: at least one `return` that does not continue into the cycle.
+
+```djinn
+async bool is_even(i32 n) {   // converted together with is_odd, no warning
+    if (n == 0) {
+        return true;
+    }
+    return await is_odd(n - 1);
+}
+
+async bool is_odd(i32 n) {
+    if (n == 0) {
+        return false;
+    }
+    return await is_even(n - 1);
+}
+
+async i32 depth(i32 n) {      // stays async: the await is not the last thing it does
+    if (n == 0) {
+        return 0;
+    }
+    i32 below = await depth(n - 1);
+    return below + 1;
+}
+```
+
+A converted cycle gets no `E6004`: without `async` its calls would be plain recursion, with no guaranteed tail calls.
+The levels of a converted cycle do not appear in a panic's stack trace, since each tail call replaces its caller's
+frame. `is_even(1000000)` runs in about the time of a loop instead of allocating a million coroutine frames.
 
 Converting removes the scheduler round trip of each await, so a converted call runs to completion before any other
 ready task, while an await of a coroutine lets ready tasks (for example spawned ones) run first. In a synchronous
