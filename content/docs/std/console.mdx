@@ -24,6 +24,7 @@ import std::sys;
     { cells: [<code>Console.error(i8* message)</code>, 'Writes a message to stderr. Returns c_result.'] },
     { cells: [<code>Console.writeSync(str format, ...args)</code>, 'Synchronous buffered write with placeholder formatting.'] },
     { cells: [<code>await Console.write(str format, ...args)</code>, 'Async buffered write with placeholder formatting.'] },
+    { cells: [<code>Console.format(str format, ...args)</code>, 'Formats into a heap buffer and returns it as a str.'] },
     { cells: [<code>await Console.print(i8* message, i64 len)</code>, 'Async raw write to stdout.'] },
     { cells: [<code>await Console.readLine()</code>, 'Async read a line from stdin. Returns void* buffer.'] },
   ]}
@@ -31,7 +32,9 @@ import std::sys;
 
 ## Formatted Output
 
-`writeSync` and `write` support indexed placeholders `{0}`, `{1}`, etc. with variadic arguments. The formatting engine inspects runtime type info to print integers, floats, and strings:
+`writeSync`, `write` and `format` support indexed placeholders `{0}`, `{1}`, etc. with variadic arguments. The formatter is plain Djinn: it reads each argument's `TypeInfo` and prints signed and unsigned integers of every width, `bool` as `true`/`false`, floats with the same shortest round-trip text as string interpolation, and `str`, `string` and `i8*` text. A placeholder whose index has no argument prints nothing.
+
+The three methods share one formatter that fills a buffer and hands it back to the caller: `writeSync` writes it with `write`, `write` submits it to the runtime's event loop, and `format` grows a heap buffer and returns it as a NUL-terminated `str`. Text longer than the 8 KB buffer is streamed in pieces, so nothing is truncated. Only the async methods use the Djinn runtime.
 
 ```djinn
 import std::sys;

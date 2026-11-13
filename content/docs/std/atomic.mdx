@@ -1,0 +1,55 @@
+---
+title: Atomics
+---
+
+import { Table } from '@/components/table';
+
+## Overview
+
+`std::sys` provides `atomic<T>`, `atomic_bool` and `Atomics.fence()`. They are thin wrappers over the
+[atomic intrinsics](/docs/std/instrinsic#atomic-operations): every method inlines to a single LLVM atomic instruction,
+with no call into the runtime, so they work the same in native, runtime and JIT builds.
+
+```djinn
+import std::sys;
+
+i32 main() {
+    atomic<i32> hits = atomic<i32>(0);
+    hits.fetchAdd(1);
+    if (hits.compareExchange(1, 10)) {
+        return hits.load();
+    }
+    return 0;
+}
+```
+
+## atomic&lt;T&gt;
+
+`T` is an integer of 8 to 64 bits or a pointer. The arithmetic and bitwise methods need an integer.
+
+<Table
+  columns={[
+    { header: 'Method', width: 'w-2/5' },
+    { header: 'Description' },
+  ]}
+  rows={[
+    { cells: [<code>atomic&lt;T&gt;(T initial)</code>, 'Creates the value (constexpr).'] },
+    { cells: [<code>T load()</code>, 'Reads the value.'] },
+    { cells: [<code>void store(T value)</code>, 'Writes the value.'] },
+    { cells: [<code>T exchange(T value)</code>, 'Writes the value and returns the previous one.'] },
+    { cells: [<code>T fetchAdd(T delta)</code>, 'Adds and returns the previous value.'] },
+    { cells: [<code>T fetchSub(T delta)</code>, 'Subtracts and returns the previous value.'] },
+    { cells: [<code>T fetchAnd(T mask)</code>, 'Bitwise and; returns the previous value.'] },
+    { cells: [<code>T fetchOr(T mask)</code>, 'Bitwise or; returns the previous value.'] },
+    { cells: [<code>T fetchXor(T mask)</code>, 'Bitwise xor; returns the previous value.'] },
+    { cells: [<code>bool compareExchange(T expected, T desired)</code>, 'Stores desired only when the value equals expected; returns whether it stored.'] },
+  ]}
+/>
+
+## atomic_bool
+
+`atomic_bool` stores one byte and offers `load`, `store`, `exchange` and `compareExchange` with `bool` values.
+
+## Ordering
+
+Every operation is sequentially consistent. `Atomics.fence()` emits a full memory barrier.
