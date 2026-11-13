@@ -1,0 +1,181 @@
+---
+title: Filesystem
+---
+
+## Overview
+
+`std::filesystem` is a capability-based filesystem API. It is safe by default: no path traversal, no TOCTOU checks,
+no symbolic links followed, and every fallible call returns `result<T, FsError>`.
+
+```djinn
+import std::filesystem;
+```
+
+| Type | Role |
+|---|---|
+| `Path` | Validated path text. The only way to build one is `Path.parse`. |
+| `Directory` | A capability: every relative operation resolves from its handle. |
+| `File` | An already-open regular file, used through its handle, never through a path. |
+| `OpenOptions` | How a file is opened. |
+| `Metadata`, `FileKind` | Size, kind, modification time (ns since the Unix epoch) and permissions. |
+| `DirEntries`, `DirEntry` | A directory listing. |
+| `FsError` | Every POSIX and Windows failure the API can report. |
+
+`Directory`, `File` and `DirEntries` are `Disposable`: they close when they go out of scope.
+
+## Async and sync
+
+Every operation that touches the disk is `async`. `read` and `write` use the operating system's asynchronous I/O (IOCP
+on Windows, io_uring on Linux) and the coroutine resumes when the transfer completes. Open, stat, mkdir, rename, remove,
+listing and sync have no asynchronous form in the OS, so they run on a worker pool in the runtime that resumes the
+coroutine when the call returns. Kernels without io_uring, and macOS, run reads and writes on the pool as well. The
+scheduler never blocks on the filesystem.
+
+```djinn
+result<File, FsError> file = await dir.open_file(path, OpenOptions.read());
+```
+
+The blocking versions have the same name with a `_sync` suffix (`open_file_sync`, `read_to_string_sync`,
+`sync_sync`...) and run on the calling thread. `Path`, `OpenOptions`, `Metadata` and `DirEntries.next` do no I/O and are
+plain functions.
+
+A pending request holds raw pointers to the `Path` text and to read/write buffers, so keep them alive across the `await`.
+The tables below list the async names; add `_sync` for the blocking one.
+
+## Path
+
+```djinn
+result<Path, FsError> parsed = Path.parse("logs/app.txt");
+```
+
+`Path` borrows its text (a `str`), so the text must outlive the `Path`.
+
+`Path.parse` rejects:
+
+| Input | Error |
+|---|---|
+| `""`, `a//b`, `a/` (empty component) | `InvalidPath` |
+| `..`, `a/../../x` | `PathEscapes` |
+| NUL, control characters, `\ : < > " \| ? *` (`a:b`, `file:stream`) | `InvalidPath` |
+| `CON`, `NUL`, `COM1`, `LPT1`... with or without extension | `InvalidPath` |
+| component ending in `.` or a space (`trailing.`) | `InvalidPath` |
+| component longer than 255 bytes, path longer than 4096 | `NameTooLong` |
+
+`.` components are accepted and ignored, so `./local/path` and `a/./b.txt` are valid relative paths.
+
+Absolute paths (`/etc`, `C:/Users`) parse, with `is_absolute()` true, but only `Directory.open_root` accepts them. Any
+other `Directory` operation given one fails with `AbsolutePath`.
+
+| Method | Description |
+|---|---|
+| `is_absolute()` | Whether the path starts with `/` or a drive such as `C:/` |
+| `as_str()` | The validated text |
+| `file_name()` | The last component |
+| `parent()` | `optional<Path>`; empty for a single relative component |
+| `Path.unchecked(text, absolute)` | `unsafe`; skips validation |
+
+## Directory
+
+`Directory.open_root` is the single place where ambient authority enters. Everything else derives from a `Directory`.
+
+```djinn
+Path here = switch Path.parse(".") { Ok p -> p, Error e -> Path.unchecked(".", false) };
+result<Directory, FsError> root = Directory.open_root(here);
+```
+
+Relative paths are resolved one component at a time, each opened without following links, so a component swapped
+for a link cannot send the walk outside the directory.
+
+| Method | Description |
+|---|---|
+| `open_root(path)`, `open_root_following(path)` | Static. Opens a directory from the process's view of the filesystem |
+| `open_dir(path)`, `open_dir_following(path)` | Opens a sub-directory |
+| `open_file(path, options)` | Opens a file |
+| `metadata(path)`, `metadata_following(path)` | Kind, size, modified time, permissions |
+| `create_dir(path)` | Creates one directory |
+| `create_dir_all(path)` | Creates every missing directory; succeeds if the final one exists |
+| `remove_file(path)`, `remove_dir(path)` | `remove_dir` fails with `NotEmpty` on a non-empty directory |
+| `rename(from, target, to, replace)` | Moves `from` to `to` inside `target`. With `replace` it is atomic over an existing file; without it an existing destination gives `AlreadyExists` |
+| `entries()` | `DirEntries`, read in full. Entry names stay valid until it is closed |
+| `read_to_string(path, max_bytes)` | Whole file as `string`; `FileTooLarge` past `max_bytes` |
+| `write_atomic(path, data)` | Writes a temporary file beside the target, syncs it, renames it over the target |
+| `close()` | Closes early; later calls fail with `Closed` |
+
+There is no `exists()`. Open the file and handle `NotFound`: a check followed by an open is a race, an open is not.
+
+## File
+
+| Method | Description |
+|---|---|
+| `read(buffer, count)`, `write(buffer, count)` | One read or write; returns the byte count (0 on end of file) |
+| `write_all(data)` | Writes the whole `str` |
+| `read_to_string(max_bytes)` | Reads the rest of the file |
+| `seek_start(offset)`, `seek_end(offset)`, `position()` | Positioning |
+| `metadata()`, `truncate(length)`, `sync()`, `close()` | Operate on the handle |
+
+Directories, FIFOs and devices are refused (`IsADirectory`, `NotRegularFile`).
+
+## OpenOptions
+
+| Constructor | Meaning |
+|---|---|
+| `OpenOptions.read()` | Existing file, read-only |
+| `OpenOptions.read_write()` | Existing file, read and write |
+| `OpenOptions.create()` | Create or truncate, write-only |
+| `OpenOptions.create_new()` | Create; fails with `AlreadyExists` if present (`O_EXCL`) |
+| `OpenOptions.append()` | Create if missing, write at the end |
+| `.following_symlinks()` | Follow links |
+| `.with_mode(mode)` | Permission bits for new files (default `0644`) |
+
+## Symbolic links
+
+A symlink, or a Windows junction, at any component of a relative path fails with `SymlinkRefused`. `following_symlinks()`
+and the `*_following` methods opt in. After that the walk goes where the link points, which may be outside the
+directory: following links gives up the containment guarantee.
+
+## Example
+
+```djinn
+import std::filesystem;
+
+Path parsed(str text) {
+    return switch Path.parse(text) { Ok p -> p, Error e -> Path.unchecked("x", false) };
+}
+
+async i32 main() {
+    result<Directory, FsError> opened = await Directory.open_root(parsed("."));
+    return switch opened {
+        Ok root -> await save(&root),
+        Error e -> 1
+    };
+}
+
+async i32 save(Directory* root) {
+    result<bool, FsError> made = await root.create_dir_all(parsed("out"));
+    result<bool, FsError> done = await root.write_atomic(parsed("out/report.txt"), "ready");
+    return switch done { Ok v -> 0, Error e -> 2 };
+}
+```
+
+## Errors
+
+`FsError` variants: `NotFound`, `AlreadyExists`, `PermissionDenied`, `NotADirectory`, `IsADirectory`, `NotEmpty`,
+`InvalidArgument`, `NameTooLong`, `SymlinkRefused`, `NoSpace`, `ReadOnly`, `TooManyOpenFiles`, `Busy`, `IoError`,
+`CrossDevice`, `Unsupported`, `QuotaExceeded`, `TooManyLinks`, `BadHandle`, `FileTooLarge`, `WouldBlock`, `OutOfMemory`,
+`BrokenPipe`, `NotRegularFile`, `InvalidPath`, `PathEscapes`, `AbsolutePath`, `Closed` and `Unknown`.
+`fs_error_message(error)` returns a description.
+
+Operations with no value return `result<bool, FsError>` holding `Ok(true)`.
+
+## Low-level API
+
+`std::filesystem::native` has the `extern "C"` bindings to the runtime (`runtime/fs_safe.c`) and `Native`, `unsafe`
+wrappers over raw `i64` handles. Nothing there validates paths or owns handles; a negative result is the negated error
+code. The namespace is not called `unsafe` because that is a keyword.
+
+## Limits
+
+- `open_root` resolves its path as a string, so links in its leading components are followed; only the last
+  component is checked.
+- Listings are read in full. Operations other than `read` and `write` share a worker pool of 4 threads.
+- There is no owned path type or `join` yet.
