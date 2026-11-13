@@ -2,6 +2,8 @@
 title: Extern & FFI
 ---
 
+import {Table} from '@/components/table';
+
 ## Extern Functions
 
 Use `extern "C"` to declare C functions that can be called from Djinn:
@@ -16,6 +18,30 @@ extern "C" {
 ```
 
 These are linked at compile time against the C standard library.
+
+## Redeclaring an Extern
+
+Declaring the same extern function twice (for example `strlen`, which the standard library already declares) is allowed when the declarations match: it only reports a warning (`E6002`) and the first declaration is kept. A redeclaration with a different return type, different parameter types or a different variadic flag is an error (`E3003`). Pointer types are compared by ABI, so `void*`, `i8*` and `ptr<i8>` count as the same type.
+
+## Runtime Allocators
+
+The runtime exports two allocators that trap on out-of-memory instead of returning `null`:
+
+<Table
+    columns={[
+        {header: 'Function', width: 'w-1/3'},
+        {header: 'Memory'},
+    ]}
+    rows={[
+        {cells: [<code>__djinn_alloc(size)</code>, 'Uninitialized, like `malloc`. Use it for buffers that are written before they are read (copies, text).']},
+        {cells: [<code>__djinn_alloc_zeroed(size)</code>, 'Zeroed, like `calloc`. `new` and array literals use it, so there is no need to `memset` the result.']},
+    ]}
+/>
+
+Both are released with `free` (or `__djinn_free`). The compiler marks them as allocators for LLVM
+(`allockind`, `allocsize`, `noalias`), wherever they are declared, so at `-O1` and above a zero fill right after
+`__djinn_alloc_zeroed` is removed and an allocation whose result is never used can be dropped.
+`__djinn_malloc` is the old name of `__djinn_alloc_zeroed` and stays exported only for code built by an older compiler.
 
 ## Calling Extern Functions
 

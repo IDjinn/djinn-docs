@@ -24,7 +24,7 @@ Attributes are defined in `std/sys/intrinsics.djinn` using the `attribute` keywo
 attribute ForceInline(AttributeTarget.Function | AttributeTarget.Method);
 
 // With fields:
-attribute Align(AttributeTarget.Struct | AttributeTarget.Field | AttributeTarget.Parameter) {
+attribute Align(AttributeTarget.Struct | AttributeTarget.Field | AttributeTarget.Parameter | AttributeTarget.Function | AttributeTarget.Method) {
     i32 value;
 }
 
@@ -134,7 +134,7 @@ Marks a function that does not call itself directly or indirectly.
 
 ### `[Align(N)]`
 
-Specifies memory alignment for a struct:
+Specifies memory alignment for a struct. On a function or method it sets the alignment of the function itself (`N` must be a power of two):
 
 ```djinn
 [Align(16)]
@@ -252,7 +252,7 @@ struct Math {
 | `NoUnwind` | Function, Method | - | `nounwind` |
 | `WillReturn` | Function, Method | - | `willreturn` |
 | `NoRecurse` | Function, Method | - | `norecurse` |
-| `Align` | Struct, Field, Parameter | `i32 value` | alignment |
+| `Align` | Struct, Field, Parameter, Function, Method | `i32 value` | alignment |
 | `intrinsic` | Struct | - | compile-time |
 | `NoMangle` | Function, Struct | - | skip mangling |
 | `Deprecated` | All | `i8* message` | - |

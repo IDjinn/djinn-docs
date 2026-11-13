@@ -155,3 +155,23 @@ void inspect(object obj) {
     }
 }
 ```
+
+## Pointer conversions
+
+A pointer converts implicitly only to a pointer of the same element type, to `void*`, or from `void*`. Any other `T*` to `U*` needs an explicit cast (error `E3054`).
+
+A string literal converts to `str`, `string`, `i8*`, `ptr<i8>` or `void*`, and never to a pointer of another type. When both `str` and a pointer overload exist, `f("text")` picks `str`. A `str` or `string` does not decay to a pointer; call `.toCString()` to get a null-terminated copy.
+
+## Unsafe pointer operations
+
+Indexing a pointer (`p[i]`, read or write) is an unsafe operation: it needs an `unsafe` block or an `unsafe` function, otherwise error `E3052`. The compiler cannot check the bounds of a raw address, so it does not do it for you. Use `str`, `arr<T>` or `array<T>` for sequences in safe code.
+
+Casting an integer to a pointer, including the literal `0` as in `(T*)0`, is also unsafe. To say "no pointer" in safe code, declare the type as `T*?` and use `null`.
+
+```djinn
+i32 first(i32* values) {
+    unsafe {
+        return values[0];
+    }
+}
+```

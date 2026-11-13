@@ -164,6 +164,7 @@ f32 minPos = f32.MIN_POSITIVE;  // 1.17549435e-38
         <ul>
           <li><code>is_empty() -&gt; bool</code> — returns <code>true</code> if length is 0</li>
           <li><code>ptr() -&gt; i8*</code> — returns raw pointer to the data</li>
+          <li><code>toCString() -&gt; i8*</code> — <code>unsafe</code>; copies the text into a new heap buffer with a trailing null byte. Use it to pass text to C; <code>ptr()</code> is not null-terminated. The caller frees the buffer</li>
           <li><code>hash() -&gt; u64</code> — returns a hash of the string content</li>
           <li><code>slice(size start, size length) -&gt; str</code> — returns a sub-slice of the string</li>
           <li><code>substring(size start, size length) -&gt; string</code> — returns a new heap-allocated substring</li>
@@ -171,7 +172,7 @@ f32 minPos = f32.MIN_POSITIVE;  // 1.17549435e-38
         </ul>
         <p><strong>Operators:</strong></p>
         <ul>
-          <li><code>==</code> — compares two <code>str</code> values by content</li>
+          <li><code>==</code> — compares two <code>str</code> values by content (only the data, through <code>Equatable</code>)</li>
           <li><code>+</code> — concatenates two strings into a new <code>string</code></li>
         </ul>
       </>,
@@ -185,6 +186,7 @@ f32 minPos = f32.MIN_POSITIVE;  // 1.17549435e-38
         <ul>
           <li><code>is_empty() -&gt; bool</code> — returns <code>true</code> if length is 0</li>
           <li><code>ptr() -&gt; i8*</code> — returns raw pointer to the data</li>
+          <li><code>toCString() -&gt; i8*</code> — <code>unsafe</code>; copies the text into a new heap buffer with a trailing null byte. Use it to pass text to C; <code>ptr()</code> is not null-terminated. The caller frees the buffer</li>
           <li><code>length() -&gt; i32</code> — returns the string length</li>
           <li><code>capacity() -&gt; i32</code> — returns the allocated capacity</li>
           <li><code>hash() -&gt; u64</code> — returns a hash of the string content</li>
@@ -194,7 +196,7 @@ f32 minPos = f32.MIN_POSITIVE;  // 1.17549435e-38
         </ul>
         <p><strong>Operators:</strong></p>
         <ul>
-          <li><code>==</code> — compares two <code>string</code> values by content</li>
+          <li><code>==</code> — compares two <code>string</code> values by content (only the data, through <code>Equatable</code>)</li>
           <li><code>+</code> — concatenates two strings into a new <code>string</code></li>
         </ul>
       </>,

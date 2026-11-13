@@ -19,6 +19,30 @@ struct TypeInfo {
 
 TypeInfo is generated **on demand** -- only when a value is boxed via `(object)` cast or variadic auto-boxing. Types never boxed have zero overhead.
 
+### The `Type` type
+
+`Type` is a name for `TypeInfo*`. A parameter, variable, field or return value of type `Type` receives `typeof(T)`, and writing only `T` is enough: the compiler turns a type name into `typeof(T)` wherever a `Type` (or `TypeInfo*`) is expected.
+
+```djinn
+void describe(Type type) {
+    printf("%s
+", type.name);
+}
+
+describe(typeof(Player));
+describe(Player);
+
+mut Type kind = i32;
+kind = Player;
+```
+
+Rules:
+
+- The conversion applies to arguments, variable initialization, assignment, struct fields and `return`.
+- A variable, field or property with the same name wins over the type name; the usual type mismatch error is reported.
+- Where a `Type` is not expected, a type name keeps its current error (`undefined variable`).
+- Generic instantiations (`array<i32>`) and namespace-qualified names are not converted yet: write `typeof(array<i32>)`.
+
 ### Type checking with `is`
 
 ```djinn

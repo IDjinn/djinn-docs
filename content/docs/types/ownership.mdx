@@ -1,0 +1,159 @@
+---
+title: Ownership
+---
+
+Every type has a category that decides what `T b = a;` does and when its resources are released. The compiler derives
+the category from the type, so there is nothing to annotate.
+
+| Category | Assignment `b = a` | Examples |
+|---|---|---|
+| Trivial | Copies. `a` stays valid. | integers, floats, `bool`, pointers, `str`, `arr<T>`, structs made only of trivial fields |
+| Value | Moves. `a` is no longer usable. | `string`, `array<T>`, `map`, any struct that implements `Disposable`, or holds a field that does |
+
+A struct is Trivial when none of its fields needs disposal and it does not implement `Disposable`. Adding a `Disposable`
+field to a Trivial struct turns it into a Value.
+
+```djinn
+struct Point { i32 x; i32 y; }
+
+Point a = { 1, 2 };
+Point b = a;        // copy
+i32 sum = a.x + b.x;
+```
+
+## Disposable
+
+A type that owns a resource implements `Disposable`. The compiler calls `disposable()` when the owning variable goes out
+of scope, in reverse order of declaration.
+
+```djinn
+import std::types::constraints;
+
+struct File : Disposable {
+    i32 handle;
+
+    public void disposable() {
+        close(this.handle);
+    }
+}
+
+i32 main() {
+    File first = { .handle = open("a.txt") };
+    File second = { .handle = open("b.txt") };
+    return 0;
+}   // second is closed, then first
+```
+
+A struct without its own `disposable()` releases its `Disposable` fields, last field first.
+
+### When the call happens
+
+- At the end of the block that declares the variable.
+- Before `return`, `throw` and an error propagated with `try`.
+- On `break` and `continue`, for the variables declared inside the loop body.
+- When the variable is assigned again: the previous value is disposed first.
+
+### Moves
+
+A move transfers the responsibility to the destination, so the source is not disposed.
+
+```djinn
+File a = { .handle = open("a.txt") };
+File b = a;         // a is moved, only b is disposed
+```
+
+A local is moved when it initializes a variable, is assigned to a variable, a field or an index, is returned, is used as a
+field value in a struct initializer, or is passed by value to a function. Using it afterwards is error `E5001`. Assigning
+to it again re-initializes it.
+
+### Parameters
+
+A parameter of a Value type owns its argument: the caller moves the value in, and the function disposes it at the end
+unless it moves it on (returns it, stores it in a field, passes it along). To only look at a value, take a `str` or a
+pointer instead. Extern functions, operators and property accessors only borrow their parameters, so calling them does
+not move the argument.
+
+Like in Rust, the disposal is decided at compile time. A drop flag is only generated for a variable that is moved or
+declared without an initializer; every other variable is disposed with a plain call.
+
+## Cloneable
+
+`Cloneable<T>` is the interface for an explicit deep copy:
+
+```djinn
+struct Buffer : Disposable, Cloneable<Buffer> {
+    i8* data;
+    size length;
+
+    public Buffer clone() { /* allocate and copy */ }
+    public void disposable() { free(this.data); }
+}
+
+Buffer b = a.clone();
+```
+
+## Standard library
+
+`array<T>`, `map<Key, Value>` and `string` implement `Disposable`, so they free their memory at the end of the scope and
+no longer need a `destroy()` call.
+
+`string` always owns a heap buffer: `string s = "abc"` copies the literal. `str` is a view and can point to static
+memory, so a literal typed `str` allocates nothing and a `string` can be viewed as a `str` without a copy.
+
+```djinn
+str view = "abc";           // static, no allocation
+string owned = "abc";       // heap copy, freed at the end of the scope
+string joined = owned + owned;   // operators borrow their operands
+```
+
+## Limits
+
+- Passing through a property setter, an operator or an extern function does not move the value.
+- Temporaries that are never stored in a variable are not disposed.
+- A value moved into a container, or into a field of an existing variable, is not tracked.
+- A `Disposable` constructed by a generic instance whose `disposable()` is never instantiated is skipped.
+- Variables declared in the initializer of a `for` live until the end of the enclosing block.
+- A coroutine cancelled while suspended does not dispose its locals.
+
+## Borrows
+
+`T* p = &x;` borrows `x` until `p` leaves scope. While the borrow is live, `x` cannot be assigned or moved, and a second
+borrow of a `mut` variable is an error. Only a declaration initialized directly with `&x` is tracked.
+
+## owner
+
+`owner<T>` (namespace `std::memory`) is a unique owner of one heap value. It is a Value, so it moves, and it is
+`Disposable`: at the end of its scope the owned value is disposed first (when `T` needs it) and then the memory is freed.
+
+```djinn
+import std::memory;
+
+owner<Point> boxed = owner<Point>({ .x = 3, .y = 4 });
+Point* point = boxed.get();   // borrow, valid while boxed is alive
+```
+
+## shared
+
+`shared<T>` (namespace `std::memory`) is a reference-counted owner. The count is atomic, so handles can be released from
+different threads. `clone()` returns a new handle and increments the count; each handle is a Value and releases one
+reference at the end of its scope. When the last handle goes away, the value is disposed and the memory is freed.
+
+```djinn
+import std::memory;
+
+shared<Config> first = shared<Config>({ .level = 2 });
+shared<Config> second = first.clone();   // references() == 2
+```
+
+## Views
+
+`str` and `arr<T>` are Trivial views: copying one copies a pointer and a length, not the data. A view initialized from an
+owning value (`str view = text;`, or a method that returns a view such as `text.slice(1, 3)`) borrows it. The owner is not
+moved, but it cannot be moved, reassigned or returned while the view is in scope (`E5003`), and a view of a local cannot be
+returned from its function (`E5006`).
+
+```djinn
+string text = "hello";
+str view = text;
+string other = text;   // error: cannot move 'text' while it is borrowed by 'view'
+```
