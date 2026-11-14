@@ -1,0 +1,64 @@
+---
+title: Nullable Types
+description: T? is an optional value; ?., !. and ?? make absence explicit.
+---
+
+`T?` is shorthand for `optional<T>` and works for any `T`: numbers, structs, arrays and pointers. A value that can be absent says so in its type, and the compiler does not let you use it as if it were present.
+
+```djinn
+i32? find(i32 id) {
+    if (id == 3) {
+        return 30;
+    }
+    return null;
+}
+```
+
+Assigning a `T` or `null` to a `T?` wraps it automatically.
+
+## Checking and defaults
+
+```djinn
+i32? maybe = find(3);
+
+if (maybe != null) {
+    // present
+}
+
+i32 value = maybe ?? -1;
+```
+
+- `v == null` and `v != null` test the tag.
+- `a ?? b` yields `b` when `a` is null.
+- `a ??= b` assigns `b` only when `a` is null.
+- `v!.member` unwraps and accesses a member. It is an error on a value that is not nullable.
+
+## Nullable pointers
+
+`T*?` is `optional<T*>` and uses the pointer itself (null means absent), so it costs no extra space.
+
+```djinn
+User* user = find_user(id);
+
+user.name;      // checks for null and stops with R10009 if it is null
+user!.name;     // the same access written out
+user?.next;     // yields a nullable pointer: null when user is null
+user?.next?.next;
+```
+
+`?.` needs a pointer-typed member, and chains like `a?.next?.next` work.
+
+Converting a `T*?` to a `T*` implicitly compiles with warning `W6003`. Check it against `null` or use `!.` instead.
+
+## Pattern matching
+
+`optional` is a union, so it can be matched like any other:
+
+```djinn
+i32 result = switch find(3) {
+    Value v -> v,
+    Empty -> -1
+};
+```
+
+See [Enums](/docs/types/enums) and [Pattern Matching](/docs/advanced/pattern-matching).

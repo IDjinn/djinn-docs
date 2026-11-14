@@ -36,3 +36,48 @@ struct User : User{
     }
 }
 ```
+## Implementing with `impl`
+
+Methods can be added after the struct with an `impl` block. `impl Interface for Type` also declares that the type conforms, and the compiler checks the fields and method signatures:
+
+```djinn
+interface Named {
+    string name();
+}
+
+struct Pet { string label; }
+
+impl Named for Pet {
+    string name() => label;
+}
+```
+
+`impl` works on structs, enums and primitives, so you can add methods to `i32` or implement an interface for it:
+
+```djinn
+impl Hashable for u64 {
+    u64 hash() => this;
+}
+```
+
+## Generic interfaces
+
+Interfaces can take type parameters and declare operators:
+
+```djinn
+interface Comparable<T> {
+    i32 compare(T other);
+}
+
+struct Version : Comparable<Version> {
+    i32 major;
+
+    i32 compare(Version other) => major - other.major;
+}
+```
+
+They are used as constraints on generics (`where T : Comparable<T>`). See [Generics](/docs/types/generics) and [Constraints](/docs/std/constraints).
+
+## Limits
+
+There is no interface-typed value and no dynamic dispatch: interfaces are checked at compile time and resolved statically, so generic code is monomorphized per type.

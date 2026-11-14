@@ -1,0 +1,4 @@
+{
+  "title": "Standard Library",
+  "pages": ["index", "built-in-types", "collections", "constraints", "console", "debug", "logger", "filesystem", "socket", "atomic", "instrinsic", "spectre"]
+}

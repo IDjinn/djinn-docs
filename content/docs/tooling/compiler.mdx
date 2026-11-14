@@ -1,0 +1,103 @@
+---
+title: The Compiler
+description: djinnc options, projects, optimization, the JIT and the bootstrap.
+---
+
+## Pipeline
+
+```
+source -> Lexer -> Parser (AST) -> semantic analysis -> LLVM-C codegen -> object -> clang/lld + runtime
+```
+
+Objects are written directly through LLVM (`LLVMTargetMachineEmitToFile`). The `.ll` file is only written with `--emit-ir`, `--no-link` or `--keep-ir`.
+
+## Basic usage
+
+```bash
+djinnc hello.djinn -o hello --runtime-dir runtime
+djinnc app/ -o build/app            # a directory with a djinn.proj
+djinnc a.djinn b.djinn -o app       # several files share types and namespaces
+```
+
+| Option | Effect |
+|---|---|
+| `-o <path>` | Output executable. |
+| `-O1`, `-O2`, `-O3`, `-Os`, `-Oz` | Optimization level (default pipeline is `O0`). |
+| `--std`, `--std-dir <dir>` | Compile the standard library too. |
+| `--runtime-dir <dir>` | Directory with the runtime C sources. |
+| `--runtime-lib <lib>` | Link a prebuilt runtime instead of recompiling it. |
+| `--lld` | Call `lld-link` / `ld.lld` directly. Needs `--runtime-lib`. |
+| `--cpu <name\|native>`, `--features <+a,-b>` | Target CPU and features. |
+| `--target <triple>` | Target triple. Non-x86 targets only support `--emit-ir`. |
+| `--link-arg <arg>` | Extra linker argument (repeatable). |
+| `--version` | Print the compiler version. |
+
+## Looking at the output
+
+| Option | Effect |
+|---|---|
+| `--emit-tokens` | Dump the tokens and stop. |
+| `--emit-ast` | Print the AST with `<line:col>` and stop. |
+| `--emit-ir` / `--keep-ir` | Write `<output>.ll`; `--keep-ir` also links. |
+| `--emit-asm` | Write the assembly and stop. |
+| `--stats` | Files, tokens, AST nodes, arena usage and time per phase. |
+| `--show-async` | Include the compiler-generated async infrastructure in the view modes. |
+
+The view modes show only the files you pass as inputs; the runtime and the standard library are dependencies and are not dumped.
+
+## Running with the JIT
+
+`--run` executes `main` in process through ORC LLJIT instead of writing an object and linking. The exit code of `main` is the exit code of `djinnc`. It needs `--runtime-lib` and the host target, and it drops everything `main` cannot reach before compiling.
+
+```bash
+djinnc app.djinn --run --runtime-lib build/runtime/djinn_runtime.lib
+```
+
+### Tiered JIT
+
+`--tiered` adds three tiers while the program runs:
+
+1. **Tier 0** — unoptimized code that counts how often each function is entered and each loop iterates.
+2. **Tier 1** — once a function reaches the threshold (`--tier-threshold=<n>`, default 1000) and no new function has started for `--tier-settle=<ms>` (default 100), it is recompiled at `-O1` with a counter on every branch.
+3. **Tier 2** — after `4n` branch events it is recompiled at `-O2` with `!prof branch_weights` taken from those counters.
+
+Every function forwards to its newest version. There is no on-stack replacement, so a loop already running stays in its tier until its function is called again. Coroutines, variadic functions, functions taking structs by value and `main` stay in tier 0. It does not support `-g`.
+
+## Async elision
+
+An `async` function that can never suspend is compiled as a plain function and reported with warning `E6004`. Pass `--no-async-elision` to keep every `async` function a coroutine. See [Async / Await](/docs/async/async-await).
+
+## Projects
+
+A `djinn.proj` describes a build:
+
+```yaml
+compiler:
+  library-mode: true
+  output:
+    file: "mylib.djlib"
+    directory: "build/libs"
+  libs: ['std']
+```
+
+Libraries, `libs:`, `native-libs:` and `--lib-dir` are covered in [Library Compilation](/docs/advanced/libraries).
+
+## Environment variables
+
+| Variable | Effect |
+|---|---|
+| `DJINN_CLANG` | clang executable used to link. |
+| `DJINN_LLD_LINK` | `lld-link` executable (Windows `--lld`). |
+| `DJINN_LD_LLD` | `ld.lld` executable (Linux `--lld`). |
+| `DJINN_CRT_DIR`, `DJINN_DYNAMIC_LINKER` | Startup files and loader for Linux `--lld`. |
+| `DJINN_STD_DIR` | Location of `std/`. |
+
+## Bootstrap
+
+`djinnc` compiles itself. The seed builds `stage1`, `stage1` builds `stage2`, `stage2` builds `stage3`, and the build is correct when the IR of `stage2` and `stage3` is identical:
+
+```bash
+bash tools/bootstrap.sh --seed <djinnc> --runtime-dir runtime
+```
+
+The script also compiles and runs every sample with each stage and compares a benchmark against `tools/bench.reference.json`.

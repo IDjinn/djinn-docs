@@ -1,0 +1,90 @@
+---
+title: Testing
+description: Write tests with [Test] and run them with djinnc test.
+---
+
+Djinn has a built-in test framework in `libs/testing`. Test methods are found through [reflection](/docs/advanced/reflection), so there is nothing to register.
+
+## Writing a test
+
+Put tests in files named `*_test.djinn`. Normal builds skip those files.
+
+```djinn
+namespace myapp;
+
+import testing;
+
+struct MathTests {
+    [Test]
+    void adds() {
+        Expect.equal(4, 2 + 2);
+    }
+}
+```
+
+Without a `main` in the test files the driver generates one that runs the tests. `entry:` in `djinn.proj` names the normal `main` file to leave out.
+
+### Attributes
+
+| Attribute | Effect |
+|---|---|
+| `[Test]` | Marks a test method. |
+| `[Tag("name")]` | Tags a test so it can be selected with `--tag`. |
+| `[Case(...)]` | Runs a test with several argument sets. |
+| `[Bench(warmup, iterations)]` | Marks a benchmark. |
+| `[Teardown]` | Runs after the test. |
+| `[From("name")]` | Picks which test produces the value for a parameter. |
+
+### Dependencies between tests
+
+A `[Test]` that takes a parameter receives the value returned by the `[Test]` of that type, and `[From("name")]` picks one when there are several. Tests linked this way run in one worker and a failure blocks the ones below it. `--list` rejects missing producers, ambiguity and cycles.
+
+## Running
+
+```bash
+djinnc test <dir>                       # build the project and run its tests
+djinnc test <dir> --watch               # rerun when a file changes
+djinnc test <dir> -- --filter MathTests
+```
+
+Everything after `--` goes to the test program:
+
+| Option | Effect |
+|---|---|
+| `--filter <name>` | Run the matching suites or tests. |
+| `--tag <tag>` | Run tests with a tag. |
+| `--list` | List the tests and validate the dependency graph. |
+| `--graph`, `--graph-file <f>` | Show the dependency graph. |
+| `--workflow <name>` | Run a workflow. |
+| `--seed <n>` | Seed for test ordering. |
+| `--fail-fast` | Stop at the first failure. |
+| `--jobs <n>` | Parallel workers. |
+| `--junit <file>` | Write a JUnit report. |
+| `--report <file>` | Write a JSON report. |
+| `--bench`, `--bench-out`, `--bench-ref`, `--bench-tolerance` | Run benchmarks and compare them with a reference. |
+
+The exit code of `djinnc test` is the exit code of the test program. `--tests` includes `*_test.djinn` in a normal build without running anything.
+
+## Conformance suite
+
+The compiler is tested with a Djinn program under `tests/conformance` whose cases hold the source inline:
+
+```djinn
+[Test]
+void returns_three() {
+    str source = """
+i32 main() {
+    return 3;
+}
+""";
+    Verify.source(source).runs(Expected.exit(3));
+}
+```
+
+An error case checks diagnostics exactly:
+
+```djinn
+Verify.source(source).diagnostics(Expected.error(DiagnosticErrors.USE_AFTER_MOVE).at(3, 9));
+```
+
+Any missing or extra diagnostic fails the test.

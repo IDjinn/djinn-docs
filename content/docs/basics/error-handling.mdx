@@ -1,0 +1,87 @@
+---
+title: Error Handling
+description: throws, throw, try and switch. Errors are plain values with no unwinding.
+---
+
+Errors are values returned by the function, like a `Result<T, E>`. There is no unwinding, no hidden allocation and no global state. `throws(E)` only separates the success type from the error type in a function signature.
+
+## Declaring and throwing
+
+An error type is any struct listed in a `throws` clause. It carries its details in fields; there is no base type and no hierarchy.
+
+```djinn
+struct DivisionByZeroError {
+    i32 dividend;
+
+    DivisionByZeroError(i32 dividend) {
+        this.dividend = dividend;
+    }
+}
+
+i32 division(i32 value, i32 divisor) throws(DivisionByZeroError) {
+    if (divisor == 0) {
+        throw DivisionByZeroError(value);
+    }
+    return value / divisor;
+}
+```
+
+The return type stays `i32`. `throws(A, B)` means the function returns the value or one of `A` or `B`, matched by exact type. A bare `throws` accepts any error, converted to the core `Error`.
+
+## Handling a call
+
+A call to a throwing function must be handled. There are three ways.
+
+**Fallback** — `try call() ?: fallback` uses the fallback when the call fails:
+
+```djinn
+i32 a = try division(1, 0) ?: -1;
+```
+
+**Propagate** — a bare `try call()` re-throws to the caller, which must declare the error in its own `throws`. Inside a throwing function a call without `try` also propagates automatically:
+
+```djinn
+i32 half(i32 value) throws(DivisionByZeroError) {
+    return try division(value, 2);
+}
+```
+
+**Match** — a `switch` on the call handles each outcome. `Result` (or `_`) is the success arm, `Error` matches any error, and an error type name matches that type:
+
+```djinn
+i32 b = switch division(10, 2) {
+    Result v -> v,
+    DivisionByZeroError e -> e.dividend
+};
+```
+
+One arm can catch several error types: `NotFound | Denied e -> e.code`.
+
+## Contracts
+
+`require` and `ensure` clauses sit between the signature and the body. A function with contracts is implicitly throwing, and call sites handle it as above. `require` clauses decided by constant arguments are checked at compile time.
+
+```djinn
+i32 clamp(i32 value, i32 lo, i32 hi)
+    require(lo <= hi)
+    ensure(return >= lo)
+{
+    return value;
+}
+```
+
+## Panics
+
+Some failures cannot be recovered and stop the program with a code of the form `R<code>`, for example an out-of-range index (`R10010`) or a null access on a nullable pointer (`R10009`). Debug builds print a source snippet, operand values and a stack trace; release builds print the message and `file:line` only.
+
+You can install a handler that runs instead of the default report:
+
+```djinn
+System.hook(HookKind.PANIC, &handler);
+```
+
+See [Debug](/docs/std/debug) for assertions.
+
+## Errors and async
+
+Async functions can throw too; the error record is stored on the coroutine and surfaces at the `await`.

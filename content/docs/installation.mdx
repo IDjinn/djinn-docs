@@ -1,0 +1,67 @@
+---
+title: Installation
+description: Get a djinnc compiler and compile your first program.
+---
+
+`djinnc` is the Djinn compiler. It is written in Djinn, so building it needs an existing `djinnc` (the *seed*). The original C++ compiler was removed; it stays available in the `stage0-final` release as the first seed.
+
+## Requirements
+
+- **LLVM 21** with the C API shared library (`LLVM-C.dll` on Windows, `libLLVM-C.so` on Linux). It must be on `PATH` (or `LD_LIBRARY_PATH`) when `djinnc` runs.
+- **clang** on `PATH` (or set `DJINN_CLANG`), used to link.
+- **Bash** for the helper scripts (Git Bash on Windows).
+- Optional, for `--lld`: `lld-link` on Windows (run from a Visual Studio developer shell so `LIB` is set) or `ld.lld` on Linux.
+
+## Build the compiler
+
+From the repository root, with a seed `djinnc`:
+
+```bash
+bash tools/bootstrap.sh --seed <path to djinnc> --runtime-dir runtime
+```
+
+The script builds `stage1` with the seed, `stage2` with `stage1`, and `stage3` with `stage2`, then checks that the IR of `stage2` and `stage3` is identical (the fixpoint). The result is `djinnc` (`djinnc.exe` on Windows).
+
+To build only the compiler:
+
+```bash
+djinnc djinnc -o build/stage2/djinnc --runtime-dir runtime
+```
+
+## Compile your first program
+
+```djinn title="hello.djinn"
+void main() {
+    Console.printf("Hello world!");
+}
+```
+
+```bash
+djinnc hello.djinn -o hello --runtime-dir runtime
+./hello
+```
+
+The runtime (the C files in `runtime/`) is compiled together with your program. To skip that on every build, build it once and link the prebuilt library:
+
+```bash
+bash tools/build_runtime.sh --out build/runtime
+djinnc hello.djinn -o hello --runtime-lib build/runtime/djinn_runtime.lib
+```
+
+On Linux the library is `libdjinn_runtime.a`.
+
+## Run without linking
+
+`--run` compiles in memory and executes `main` through a JIT:
+
+```bash
+djinnc hello.djinn --run --runtime-lib build/runtime/djinn_runtime.lib
+```
+
+See [The compiler](/docs/tooling/compiler) for every option.
+
+## Troubleshooting
+
+- **`LLVM-C.dll` not found** — add the LLVM `bin` directory to `PATH`.
+- **Undefined `__asan_*` symbols** — the runtime library was built with ASan; use a release build.
+- **`undefined symbol: LLVM...` with `--lld` on Windows** — rebuild `stage1`; older builds did not translate the `-L` and `-l` entries of `native-libs`.

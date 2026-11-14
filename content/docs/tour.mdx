@@ -1,0 +1,141 @@
+---
+title: Quick Tour
+description: Ten minutes of Djinn, with a link to the full page for each topic.
+---
+
+A fast pass over the language. Every section links to the page that explains it properly.
+
+## Variables and functions
+
+Variables are immutable unless you write `mut`. `auto` infers the type. See [Variables](/docs/basics) and [Functions](/docs/basics/functions).
+
+```djinn
+i32 sum(i32 a, i32 b) {
+    return a + b;
+}
+
+void main() {
+    i32 limit = 10;
+    mut i32 total = 0;
+    for (i32 i in 0..limit) {
+        total = sum(total, i);
+    }
+    auto message = $"total={total}";
+}
+```
+
+## Structs, properties and methods
+
+See [Structs](/docs/types/structs).
+
+```djinn
+struct User {
+    string name;
+    i32 age;
+
+    string display { get => name; }
+
+    static User create(string name, i32 age) => User { .name = name, .age = age };
+}
+```
+
+## Enums and pattern matching
+
+`union` carries payloads; `switch` as an expression must cover every variant. See [Enums](/docs/types/enums) and [Pattern Matching](/docs/advanced/pattern-matching).
+
+```djinn
+union Shape {
+    Circle(f64),
+    Rect(f64, f64),
+    Empty()
+}
+
+f64 area(Shape shape) {
+    return switch shape {
+        Circle r -> 3.14159 * r * r,
+        Rect w h -> w * h,
+        Empty -> 0.0
+    };
+}
+```
+
+## Generics and interfaces
+
+See [Generics](/docs/types/generics) and [Interfaces](/docs/types/interfaces).
+
+```djinn
+T larger<T>(T a, T b) where T : Comparable<T> {
+    if (a.compare(b) > 0) {
+        return a;
+    }
+    return b;
+}
+```
+
+## Nullable values
+
+`T?` is an optional value. See [Nullable types](/docs/types/nullable).
+
+```djinn
+i32? find(i32 id) {
+    if (id == 3) {
+        return 30;
+    }
+    return null;
+}
+
+i32 value = find(3) ?? -1;
+```
+
+## Errors are values
+
+See [Error handling](/docs/basics/error-handling).
+
+```djinn
+i32 division(i32 value, i32 divisor) throws(DivisionByZeroError) {
+    if (divisor == 0) {
+        throw DivisionByZeroError(value);
+    }
+    return value / divisor;
+}
+
+i32 safe = try division(10, 0) ?: -1;
+```
+
+## Ownership
+
+Values with a destructor move instead of copying, and `Disposable` cleans up at the end of the scope. `&x` borrows a local. See [Ownership](/docs/types/ownership).
+
+## Async
+
+See [Async / Await](/docs/async/async-await).
+
+```djinn
+async i32 fetch_count() {
+    return 42;
+}
+
+async i32 main() {
+    i32 n = await fetch_count();
+    return n;
+}
+```
+
+## Compile time
+
+`constexpr` and `consteval` run at compile time, and macros expand hygienically. See [Compile-Time Evaluation](/docs/advanced) and [Macros](/docs/advanced/macros).
+
+```djinn
+consteval i32 factorial(i32 n) {
+    if (n <= 1) { return 1; }
+    return n * factorial(n - 1);
+}
+
+constexpr i32 BUFFER = factorial(5) * 1024;
+```
+
+## Where to go next
+
+- Follow the sidebar from **Basics** downward.
+- Browse the [standard library](/docs/std).
+- Learn the tools: [compiler](/docs/tooling/compiler) and [tests](/docs/tooling/testing).
