@@ -206,7 +206,9 @@ f32 minPos = f32.MIN_POSITIVE;  // 1.17549435e-38
 />
 
 `str` and `string` hash the same text to the same value, so a `map<str, V>` can be looked up with either. The hash
-reads the text eight bytes at a time and is not stable across compiler versions; do not store it.
+reads the text eight bytes at a time; from 65 bytes on it runs eight independent 64-bit lanes over 64-byte
+stripes, a loop the optimizer turns into SIMD multiplies. It is not a `constexpr` function and is not stable across
+compiler versions; do not store it.
 
 ## Interning
 
