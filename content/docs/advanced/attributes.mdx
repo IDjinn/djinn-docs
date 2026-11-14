@@ -130,6 +130,23 @@ struct Math {
 
 Marks a function that does not call itself directly or indirectly.
 
+### `[Pure]`
+
+Marks a function that only computes a value from its arguments. The compiler checks it and also tells LLVM that the function does not write memory.
+
+```djinn
+[Pure]
+i32 triangle(i32 n) {
+    mut i32 total = 0;
+    for (mut i32 i = 1; i <= n; i = i + 1) {
+        total = total + i;
+    }
+    return total;
+}
+```
+
+A `[Pure]` function can write local variables and fields of local structs. It cannot write through a pointer, an index or a global. It can call any function the compiler infers to be clean (no write outside locals, no native code, no `await`), directly or through other calls, and `[Pure]` externs. Native and library functions that are not `[Pure]` count as unknown. Breaking a rule reports `E3057`.
+
 ## Struct Attributes
 
 ### `[Align(N)]`

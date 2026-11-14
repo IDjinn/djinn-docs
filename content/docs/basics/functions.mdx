@@ -97,3 +97,101 @@ consteval i32 hash_seed(i32 x) {
 ```
 
 See [Compile-Time Evaluation](/docs/constexpr) for full details.
+
+## Contracts
+
+`require` and `ensure` clauses go after the signature (and after `throws`). A false condition traps with a panic report.
+
+```djinn
+i32 clamp(i32 n) require(n > -1000) ensure(result >= 0) ensure(result <= 10) {
+    if (n < 0) { return 0; }
+    if (n > 10) { return 10; }
+    return n;
+}
+```
+
+- `require(cond)` is checked on entry and sees the parameters.
+- `ensure(cond)` is checked on every `return`; `result` names the returned value (not available in `void` functions). A `throw` skips it.
+- `old(expr)` inside an `ensure` is the value of `expr` when the function was entered, for example `ensure(account.balance == old(account.balance) - amount)`.
+- Contracts are part of the body, so they do not cross a `.djlib` boundary.
+
+## Atomic regions
+
+`atomic(a, b) { ... }` saves the listed values on entry. If the function leaves the region with an error (`throw`, or a failed `try`), the values are restored before the error is returned; a normal exit keeps the changes.
+
+```djinn
+i32 transfer(Account* from, Account* to, i64 amount) throws(AuditFailed) {
+    atomic(*from, *to) {
+        from.balance = from.balance - amount;
+        try audit(amount);
+        to.balance = to.balance + amount;
+    }
+    return 0;
+}
+```
+
+- Each operand is a variable, field, element or dereference of a plain copyable value (no `string`, arrays or disposable types). Anything else reports `E3058`.
+- Only the listed values are restored; writes elsewhere are not undone.
+- An error handled inside the region does not roll it back.
+- `await` and `spawn` are not allowed inside the region (`E3059`), and neither is calling a function that can reach an `await` (the compiler infers this through the whole call chain). Calling an `async` function without awaiting it is fine. No other task can run while the region is open, so no one sees the half-done update.
+
+### `after_commit`
+
+An atomic region can be followed by an `after_commit` block. It runs once the region has finished normally: when the block ends, and also on `return`, `break` and `continue` that leave the region. It does not run when an error leaves the region.
+
+```djinn
+atomic(account.balance) {
+    account.balance = account.balance - amount;
+} after_commit {
+    notify(account);
+}
+```
+
+The block runs outside the region, so a failure there does not undo the update and `await` is allowed in it. Delivery is best effort: if the process dies between the update and the block, the block never runs.
+
+## Unit of work (`uow`)
+
+A `uow` declaration bundles clauses that several functions share. It can hold `require`, `ensure`, one `atomic(...)` operand list and an `after_commit` block. A function applies it with `uow(Name)` after its signature (and after its own clauses).
+
+```djinn
+uow Transfer {
+    require(amount > 0)
+    ensure(from.balance + to.balance == old(from.balance) + old(to.balance))
+    atomic(*from, *to)
+    after_commit {
+        *notified = *notified + 1;
+    }
+}
+
+i32 transfer(Account* from, Account* to, i64 amount, i32* notified) throws(Failed) uow(Transfer) {
+    from.balance = from.balance - amount;
+    try audit(amount);
+    to.balance = to.balance + amount;
+    return 0;
+}
+```
+
+- The clauses are copied into each function, so they refer to the function's parameters by name (and to `result`). A function that does not have those parameters fails to compile.
+- The body runs inside the `atomic` region, and the function's own clauses are added to the shared ones.
+- A `uow` must be declared before the functions that use it, in the same file or library.
+
+## Listing the guarantees
+
+`djinnc --obligations` prints every guarantee the compiler tracks after a successful check:
+
+```text
+obligations:
+  bank.djinn:4:5   require            checked      withdraw
+  bank.djinn:16:86 atomic.rollback    enforced     withdraw
+  bank.djinn:16:86 atomic.no_suspend  proved       withdraw
+  bank.djinn:6:18  after_commit       best_effort  withdraw
+  bank.djinn:12:1  pure               proved       twice
+summary: 2 proved, 1 enforced, 1 checked, 1 best_effort
+```
+
+- `proved`: shown statically by the compiler (`[Pure]`, an `atomic` region that cannot suspend).
+- `enforced`: the compiler installs a run-time protocol (the `atomic` rollback).
+- `checked`: tested when the code runs and traps if false (`require`, `ensure`).
+- `best_effort`: no guarantee if the process dies (`after_commit`).
+
+Clauses that come from a `uow` point at the `uow` declaration.

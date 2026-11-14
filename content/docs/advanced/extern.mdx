@@ -45,6 +45,8 @@ Both are released with `free` (or `__djinn_free`). The compiler marks them as al
 
 ## Calling Extern Functions
 
+A C function can do anything the compiler cannot see, so calling an extern function needs an `unsafe` block, an `unsafe` function or an `unsafe` constructor. Without one the compiler reports `E3052`.
+
 Extern functions are called like regular Djinn functions:
 
 ```djinn
@@ -52,11 +54,23 @@ extern "C" {
     i32 printf(i8* format, ...);
 }
 
-i32 main() {
+unsafe i32 main() {
     printf("Hello %s! Answer: %d\n", "World", 42);
     return 0;
 }
 ```
+
+Wrap the call in an `unsafe` block to keep the rest of a function safe:
+
+```djinn
+i32 length(i8* text) {
+    unsafe {
+        return strlen(text);
+    }
+}
+```
+
+An extern declared `[Pure]` is still unsafe to call, but it can be called from a `[Pure]` function.
 
 ## Variadic Functions
 
@@ -89,7 +103,7 @@ The standard library wraps common extern declarations. Import them directly:
 import std::types;
 import std::libc;
 
-i32 main() {
+unsafe i32 main() {
     printf("Using std::libc\n");
     return 0;
 }
