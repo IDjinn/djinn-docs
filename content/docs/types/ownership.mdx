@@ -52,6 +52,9 @@ A struct without its own `disposable()` releases its `Disposable` fields, last f
 - Before `return`, `throw` and an error propagated with `try`.
 - On `break` and `continue`, for the variables declared inside the loop body.
 - When the variable is assigned again: the previous value is disposed first.
+- When a field of a struct is assigned again (`this.items = ...`, `box.item = ...`): the previous value is disposed first.
+  The first assignment inside a constructor, and into a field of a local declared without an initializer or reached
+  through another pointer, does not dispose anything, because the field may not hold a value yet.
 
 ### Moves
 
@@ -65,6 +68,22 @@ File b = a;         // a is moved, only b is disposed
 A local is moved when it initializes a variable, is assigned to a variable, a field or an index, is returned, is used as a
 field value in a struct initializer, or is passed by value to a function. Using it afterwards is error `E5001`. Assigning
 to it again re-initializes it.
+
+### Explicit calls and moving out of places
+
+`disposable()` runs only from the compiler. Calling it by hand (`x.disposable()`, `this.items.disposable()` inside
+`disposable()`) is error `E5007`: the end-of-scope drop and the field drop glue would run it a second time.
+
+A value that needs disposal cannot be moved out of a field, an element or a pointer (`Handle h = box.item;`,
+`consume(*p)`): its owner would dispose it again. This is error `E5008`. Read the field you need, restructure so the
+value is moved as a whole, or use `unsafe` code, where the check is off.
+
+### Initialization
+
+A field whose type needs disposal must have a value before the struct can be dropped:
+
+- a struct initializer must give every such field a value (`E5009` otherwise);
+- a constructor must assign every such field with a statement at the top of its body, before any `return` (`E5009`).
 
 ### Parameters
 
@@ -111,6 +130,10 @@ string joined = owned + owned;   // operators borrow their operands
 - Passing through a property setter, an operator or an extern function does not move the value.
 - Temporaries that are never stored in a variable are not disposed.
 - A value moved into a container, or into a field of an existing variable, is not tracked.
+- A field assigned through a raw pointer, or a field of a local declared without an initializer, does not dispose its
+  previous value, and a local declared without an initializer is never disposed after only its fields were assigned.
+- Manual `free` or `__djinn_free` of memory that a `Disposable` also releases is not detected: the compiler cannot see
+  what an extern call or a raw pointer owns.
 - A `Disposable` constructed by a generic instance whose `disposable()` is never instantiated is skipped.
 - Variables declared in the initializer of a `for` live until the end of the enclosing block.
 - A coroutine cancelled while suspended does not dispose its locals.
@@ -137,6 +160,10 @@ Point* point = boxed.get();   // borrow, valid while boxed is alive
 `shared<T>` (namespace `std::memory`) is a reference-counted owner. The count is atomic, so handles can be released from
 different threads. `clone()` returns a new handle and increments the count; each handle is a Value and releases one
 reference at the end of its scope. When the last handle goes away, the value is disposed and the memory is freed.
+
+The counter and the payload share one heap block. `clone()` raises the count with a compare-and-swap loop and panics if
+the count is already zero, so a released block is never resurrected; the caller must keep the source handle alive for the
+whole call. `get()` returns a pointer that is only valid while some handle is alive, and `references()` is a snapshot.
 
 ```djinn
 import std::memory;
