@@ -79,6 +79,8 @@ a report. Float division by zero follows IEEE 754 (infinity or NaN), also in `co
 
 An explicit cast that narrows an integer stops the program when the value does not fit
 (`(u8)x` with `x = 300`), and `(bool)value` accepts only `0` or `1`.
+A cast to a wrapping type (`(u8w)x`, `(u64w)wide`) never stops: it keeps the low bits, which is how the
+halves of a `u128w` product are taken (`(u64w)product` and `(u64w)(product >> 64w)`).
 
 ### Checked overflow
 

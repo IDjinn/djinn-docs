@@ -22,6 +22,13 @@ export const intrinsics = {
   'likely(bool)': 'Marks a branch as likely to be taken (branch prediction hint).',
   'unlikely(bool)': 'Marks a branch as unlikely to be taken (branch prediction hint).',
   'typeof(Expression)': 'Returns the type of an expression at compile time without evaluating it.',
+  'atomic_load(T* address)': 'Atomically reads the value (sequentially consistent).',
+  'atomic_store(T* address, T value)': 'Atomically writes the value.',
+  'atomic_swap(T* address, T value)': 'Atomically replaces the value and returns the previous one.',
+  'atomic_add / atomic_sub (T* address, T value)': 'Atomic read-modify-write; returns the previous value. T must be an integer.',
+  'atomic_and / atomic_or / atomic_xor (T* address, T value)': 'Atomic bitwise read-modify-write; returns the previous value. T must be an integer.',
+  'atomic_cas(T* address, T expected, T desired)': 'Stores desired only when the value equals expected; returns whether it stored.',
+  'atomic_fence()': 'Full memory barrier.',
 }
 
 
@@ -34,3 +41,21 @@ export const intrinsics = {
     cells: [<code>{name}</code>, desc],
   }))}
 />
+
+## Atomic operations
+
+The `atomic_*` intrinsics compile straight to LLVM atomic instructions (`atomicrmw`, `cmpxchg`, `load atomic`,
+`store atomic`, `fence`), all sequentially consistent, so they need no runtime library. `T` is an integer of 8 to 64
+bits or a pointer; the arithmetic and bitwise forms take integers only. Anything else is error `E3059`.
+
+```djinn
+i32 main() {
+    mut i64 counter = 5;
+    i64 previous = atomic_add(&counter, 3);
+    bool stored = atomic_cas(&counter, 8, 10);
+    return (i32)atomic_load(&counter);
+}
+```
+
+`std::sys` wraps them in [`atomic<T>`](/docs/std/atomic) for code that prefers methods.
+
