@@ -1,28 +1,41 @@
 ---
 title: Get Started
-description: Everything you need to know compiled in a single documentation site.
+description: What Djinn is, and the order in which to learn it.
 ---
 
-Djinn is a fast, memory-safe programming language with a familiar C-like syntax. Built on top of LLVM, it delivers native performance while providing seamless interoperability with C and C++ codebases.
+Djinn is a compiled, statically typed language with a familiar C-like syntax. It compiles to native code through LLVM, has no garbage collector and no hidden runtime cost, and the compiler itself is written in Djinn.
 
 ## Why Djinn?
 
-- **Blazing Fast** — Compiles to optimized native code through the LLVM backend, putting it on par with C and C++ in raw performance.
-- **Memory Safety** — Eliminates entire classes of bugs at compile time without sacrificing speed. No garbage collector, no runtime overhead.
-- **C/C++ Interop** — Call into existing C and C++ libraries directly with zero-cost bindings. Gradually adopt Djinn in your existing projects.
-- **Familiar Syntax** — If you know C, you already know most of Djinn. Pick it up in minutes, not months.
+- **Fast** — Direct LLVM IR code generation with the usual `-O1`..`-O3` pipeline, attributes that map to LLVM attributes, and a range analysis that feeds the optimizer.
+- **Memory safe without a GC** — Immutable by default, move semantics, `Disposable` cleanup at the end of scope, a borrow checker and bounds-checked strings and arrays. Raw pointers need `unsafe`.
+- **Async by default** — Functions marked `async` become LLVM coroutines driven by an event loop and a thread pool.
+- **Errors are values** — `throws`, `try` and `switch` return plain values. There is no unwinding.
+- **Compile-time programming** — `constexpr`, `consteval`, hygienic macros and reflection that costs nothing when unused.
+- **C interop** — Call C libraries through `extern "C"` blocks.
+- **Great tooling** — A language server, a built-in test runner, a JIT mode and a Compiler Explorer integration.
 
 ## Hello World!
 
 ```djinn
 void main() {
-  Console.printf("Hello world!");
+    Console.printf("Hello world!");
 }
 ```
 
-## What's Next?
+## How to read these docs
+
+The sidebar follows a learning path. Read it top to bottom the first time; each section only relies on the ones before it.
+
+1. **Start here** — [install the compiler](/docs/installation) and take the [quick tour](/docs/tour).
+2. **Learn the language** — [Basics](/docs/basics) (variables, functions, control flow, error handling, namespaces) and [Types](/docs/types) (numbers, structs, enums, interfaces, generics, nullable types, ownership).
+3. **Going further** — [Async](/docs/async/async-await) and [Advanced](/docs/advanced) topics: compile-time evaluation, pattern matching, operators, macros, attributes, reflection, FFI and libraries.
+4. **Standard library** — [overview](/docs/std) and one page per module.
+5. **Tooling** — the [compiler](/docs/tooling/compiler), the [test runner](/docs/tooling/testing) and the [language server](/docs/tooling/language-server).
 
 <Cards>
   <Card title="Installation" href="/docs/installation" />
-  <Card title="Language Basics" href="/docs/basics/control-flow" />
+  <Card title="Quick Tour" href="/docs/tour" />
+  <Card title="Variables" href="/docs/basics" />
+  <Card title="Standard Library" href="/docs/std" />
 </Cards>

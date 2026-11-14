@@ -1,0 +1,18 @@
+{
+  "pages": [
+    "---Start here---",
+    "index",
+    "installation",
+    "tour",
+    "---Learn the language---",
+    "basics",
+    "types",
+    "---Going further---",
+    "async",
+    "advanced",
+    "---Standard library---",
+    "std",
+    "---Tooling---",
+    "tooling"
+  ]
+}

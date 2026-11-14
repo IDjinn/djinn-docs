@@ -1,0 +1,37 @@
+---
+title: Overview
+description: What the standard library contains and how to use it.
+---
+
+The standard library lives in `std/` and is built as a library (`std.djlib`). Enable it with `--std` or `libs: ['std']` in `djinn.proj`. `import` makes a namespace visible in the current file:
+
+```djinn
+import std::collections;
+import std::text;
+```
+
+Namespaces are flat: `std::types` is one namespace, not `types` inside `std`.
+
+## Modules
+
+| Area | Contents |
+|---|---|
+| **Types** | `size`, `bool`, `str`, `string`, `arr<T>`, `optional<T>`, `result<T, E>`, `object`, `TypeInfo`. See [Built-in Types](/docs/std/built-in-types). |
+| **Constraints** | `Hashable`, `Comparable`, `Equatable`, `Addition`, `Serializable`, `Disposable`, `Cloneable`. See [Constraints](/docs/std/constraints). |
+| **Collections** | `array`, `map`, `set`, `bag`, `stack`, `queue`, `priority_queue`, `ring_buffer`, `bitset`, `linked_list`, `slice`, `range`, `Sorting`. See [Collections](/docs/std/collections). |
+| **Memory** | `arena`, `pool`, `allocator`, `owner<T>`, `shared<T>`. See [Ownership](/docs/types/ownership). |
+| **Text** | `string_builder`, `Text`, `Numbers`, `Chars`, string methods (`split`, `replace`, `repeat`, `toUpper`, `parseI64`, ...), `interner`. |
+| **Encoding and hashing** | `byte_buffer`, `Hex`, `Base64`, `Hash` (FNV-1a, xxHash64, SHA-256), CSV and TOML readers. |
+| **Filesystem** | Validated `Path`, `Directory`, `File`. See [Filesystem](/docs/std/filesystem). |
+| **System** | `Console`, `io`, `Debug`, `Logger`, `libc`, `Atomic`, `Math`, `process`, panic hooks. See [Console](/docs/std/console), [Debug](/docs/std/debug), [Logger](/docs/std/logger), [Atomics](/docs/std/atomic) and [Intrinsics](/docs/std/instrinsic). |
+| **Terminal UI** | `Spectre`: styling, tables, trees, prompts and progress bars. See [Spectre](/docs/std/spectre). |
+| **Networking** | Async sockets. See [Socket](/docs/std/socket). |
+| **Utilities** | `json`, `version`. |
+
+## Reading order
+
+If you are new, read in this order: [Built-in Types](/docs/std/built-in-types), [Collections](/docs/std/collections), [Console](/docs/std/console), then the rest as needed.
+
+## Async by default
+
+Anything that touches the outside world, such as files and sockets, is async by default; blocking variants end in `_sync`. See [Async / Await](/docs/async/async-await).

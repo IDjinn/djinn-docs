@@ -148,10 +148,10 @@ struct Direction {
 
 ## How It Works
 
-The Djinn compiler includes a stack-based bytecode VM that runs during compilation:
+The compiler evaluates `constexpr` and `consteval` code with a tree-walking interpreter over the type-checked AST, so there is no separate bytecode step:
 
-1. **Compile**: The AST expression/function is compiled to bytecode (PUSH, ADD, JMP, CALL, RET, etc.)
-2. **Execute**: The VM runs the bytecode on a value stack with local variable slots and call frames
-3. **Inline**: The resulting constant is emitted directly into the LLVM IR
+1. **Evaluate**: expression results travel in two registers chosen by the static type, and locals live in one flat frame stack per call
+2. **Write back**: the result replaces the expression in the AST as a literal, so code generation does no lookup and reads of `constexpr` variables become literals too
+3. **Emit**: the constant goes straight into the LLVM IR, and a compile-time `if` keeps only the branch that was taken
 
-This architecture allows complex compile-time computation (loops, recursion, branching) while keeping the compiler fast and the evaluation bounded.
+Structs of integers, floats, `bool` and text can be built and read during evaluation, and extern math functions marked `[Foldable]` (such as the `libm` wrappers behind `Math.sqrt`) are called on the host. This allows loops, recursion and branching at compile time while keeping the evaluation bounded.
