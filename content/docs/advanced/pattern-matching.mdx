@@ -106,6 +106,10 @@ i32 x = 42;
 if (x is i32) { }  // ERROR: 'is' expression requires operand of type 'object'
 ```
 
+## Value Switch (C# style)
+
+`subject switch { pattern => result }` compares the subject with values, relations (`> 100`) and `or` alternatives, with an optional `when` guard and a required `_` arm. It is a plain value test, not variant destructuring; see [control flow](/docs/basics/control-flow).
+
 ## Switch Expression (Enum Pattern Matching)
 
 Switch expressions destructure enum variants and return a value:

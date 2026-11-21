@@ -82,6 +82,34 @@ i32 main() {
 }
 ```
 
+## Conditional Expression
+
+`condition ? a : b` evaluates only the chosen branch. Both branches have the same type (numbers widen, and a literal takes the type of the other branch):
+
+```djinn
+i32 main() {
+    i32 x = 7;
+    i32 size = x > 5 ? 10 : 1;
+    return x > 100 ? 1 : (x > 5 ? 2 : 3);  // 2
+}
+```
+
+## Switch Expression
+
+`value switch { pattern => result, ... }` is a switch that produces a value. The subject is evaluated once and the arms are tested in order. A pattern is a value (compared with `==`, so integers, enums, `str` and `string` work), a relation such as `> 100`, or alternatives joined with `or`. An arm can add a `when` guard, and the `_` arm is required:
+
+```djinn
+str describe(i32 n) {
+    return n switch {
+        0 => "zero",
+        1 or 2 or 3 => "few",
+        > 100 => "many",
+        _ when n < 0 => "negative",
+        _ => "some"
+    };
+}
+```
+
 ## Break and Continue
 
 `break` exits the current loop. `continue` skips to the next iteration:
