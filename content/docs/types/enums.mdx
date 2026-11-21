@@ -21,6 +21,38 @@ i32 main() {
 
 Variants are constructed with the `EnumName::Variant()` syntax.
 
+Variants that carry no payload are written without parentheses, both in the declaration and where they are used:
+
+```djinn
+enum FileKind {
+    RegularFile,
+    Directory,
+    Symlink
+}
+
+FileKind kind() {
+    return FileKind::Directory;
+}
+```
+
+## Variants with Values and `parseValue`
+
+A variant can be given an integer value. `Enum::parseValue(value)` converts an `i64` back to the variant that has that value:
+
+```djinn
+enum FsError {
+    NotFound = 1,
+    AlreadyExists = 2,
+    Unknown = 0
+}
+
+FsError from_code(i64 code) {
+    return FsError::parseValue(code);
+}
+```
+
+`parseValue` returns the `Unknown` variant when no variant has the value, so an enum that uses it must declare an `Unknown` variant (error `E3034` otherwise). It works on enums without payload and is also available with `--target web`.
+
 ## Variants with Payload
 
 Variants can carry data (tagged unions / algebraic data types):

@@ -77,6 +77,23 @@ i32 main() {
 }
 ```
 
+## constexpr structs and arrays as static data
+
+A `constexpr` struct (declared `constexpr struct`) or array whose parts can all be built at compile time is emitted as constant data in the binary, with no code run at startup. Text fields (`str`, `string`) must be string literals, and nested arrays and structs are allowed:
+
+```djinn
+constexpr struct Info {
+    str name;
+    str[] tags;
+    i32 level;
+}
+
+constexpr Info info = { .name = "djinn", .tags = ["fast", "small"], .level = 3 };
+constexpr str[] names = ["a", "b", "c"];
+```
+
+A text field that is not a literal is an error, as is a struct not built with a brace initializer.
+
 ## Comparison with constexpr
 
 | Feature | `static` | `constexpr` |

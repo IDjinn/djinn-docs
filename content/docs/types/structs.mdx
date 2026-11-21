@@ -13,6 +13,19 @@ struct Point {
 }
 ```
 
+### `struct mut`
+
+`struct mut` makes every field mutable by default, so the fields do not need a `mut` each:
+
+```djinn
+struct mut Cursor {
+    i32 row;
+    i32 column;
+}
+```
+
+When every field of a struct is declared `mut` one by one, the compiler reports warning `E6007` and suggests `struct mut` instead.
+
 ## Initialization
 
 ### Brace Initializer (positional)
