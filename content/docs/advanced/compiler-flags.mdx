@@ -201,14 +201,14 @@ with `--harden=<level>` or `harden:` in `djinn.proj`; `on` is a shortcut for `st
 
 | Protection | Where | What it stops | Cost |
 | --- | --- | --- | --- |
-| `sspstrong` stack protector on every function | Djinn code, Linux and Android | A stack buffer overflow overwriting the return address: the canary changes and the program aborts | About 1–2%; frames with arrays or taken addresses only |
+| `sspstrong` stack protector on every function | Djinn code, Linux (not Android yet: its guard lives in a TLS slot that needs per-architecture module flags) | A stack buffer overflow overwriting the return address: the canary changes and the program aborts | About 1–2%; frames with arrays or taken addresses only |
 | `-z relro -z now` | link, Linux and Android | Overwriting the GOT (the table of addresses of dynamic functions such as `printf`) to redirect a call | Slightly slower startup: all symbols resolve at load |
 | `-z noexecstack` | link, Linux and Android | Running injected code from the stack | None |
 | `-fstack-protector-strong -fstack-clash-protection` | C runtime, non-Windows | Same canary for the runtime; probes so a large frame cannot skip the guard page | About 1% |
 | `-D_FORTIFY_SOURCE=3` | C runtime, non-Windows | Overflow in `memcpy`, `snprintf` and similar when the size is known | Small; needs optimization |
 
 The runtime flags apply when `djinnc` compiles the runtime sources, and in `tools/build_runtime.sh` (set
-`DJINN_HARDEN=off|basic|standard|strict`, the same levels). Windows and WebAssembly do not get the stack protector: Windows links the CRT
+`DJINN_HARDEN=off|basic|standard|strict`, the same levels). Windows, Android (Djinn code) and WebAssembly do not get the stack protector in Djinn code: Windows links the CRT
 as a DLL and the web target has no stack to smash.
 
 `unsafe` blocks keep the protections: raw pointers are where overflows come from. Only behaviors that could
