@@ -120,7 +120,13 @@ It always uses `-O2`, whatever level the program uses.
 
 The C runtime (scheduler, files, sockets, JSON, logger) is built by `tools/build_runtime.sh` with `-O2`. It
 uses `-std=c2x -fPIC` on Linux and Android and `-std=c17 -fms-runtime-lib=dll` on Windows. It is compiled
-for a generic CPU, so `--cpu` does not affect it. Without `--runtime-lib`, `djinnc` compiles the runtime sources
+for a generic CPU, so `--cpu` does not affect it.
+
+| Flag | Applies to | What it does |
+| --- | --- | --- |
+| `-ffunction-sections -fdata-sections` | all runtime objects | One section per function and variable, so a link with `--gc-sections` (`/OPT:REF` on Windows) can drop what a program does not use. It changes size only, never behavior. `djinnc` does not pass `--gc-sections` itself: add it with `--link-arg` when you want it. |
+| `-fno-strict-aliasing` | our C code (not `yyjson`) | The runtime handles memory that Djinn code wrote with other types, so the optimizer must not assume that pointers of different types never alias. It costs a little speed and removes a class of miscompiles. |
+| `-fwrapv` | our C code (not `yyjson`) | Signed integer overflow in the runtime wraps instead of being undefined behavior. This is not the same as Djinn's default, which stops on overflow; the runtime uses explicit overflow checks where a size must not wrap. | Without `--runtime-lib`, `djinnc` compiles the runtime sources
 together with your program at `-O2` using clang's default C standard.
 
 Because the runtime is a precompiled library of native objects, LLVM cannot inline its functions into your code:
