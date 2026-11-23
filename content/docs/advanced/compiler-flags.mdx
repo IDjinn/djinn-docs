@@ -74,6 +74,20 @@ your program. The standard library is built with its own `ieee754: "2019"` and `
 `std/djinn.proj`), so its compiled functions keep full IEEE semantics. Use `none` only when you know the data has
 no NaN or infinity.
 
+### Libraries built with another mode
+
+A library (`.djlib`) records the IEEE 754 revision it was built with, and `djinnc` compares it with the project that
+imports it:
+
+| Library | Project | Message |
+| --- | --- | --- |
+| `none` | `2019`, `2008` or `1985` | **Warning.** A NaN or an infinity that the project passes to the library becomes undefined behavior inside it, and its results may not be IEEE 754 values. |
+| a revision | `none` | None: values stay valid, they are just optimized less. |
+| a revision | another revision | Information only: `+ - * /` agree, only which operations exist (`fma`, `minimum`) differs. |
+| same | same | None. |
+
+Libraries written before this was recorded are not compared.
+
 ## Target CPU and features
 
 | Option | Effect |
