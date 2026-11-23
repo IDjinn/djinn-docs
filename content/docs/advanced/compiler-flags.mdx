@@ -69,8 +69,10 @@ revisions and the strict environment.
 **`--ieee754=none` is not a normal optimization level.** It lets LLVM assume there are no NaN values and no
 infinities, ignore the sign of zero, reassociate operations and fuse `a * b + c` into one rounding, and it
 may flush subnormal numbers to zero. A comparison such as `x != x` or a check for infinity can be removed,
-and results can differ between `-O` levels and between CPUs. Today the setting applies to the whole program,
-including the standard library; use it only when you know the data has no NaN or infinity.
+and results can differ between `-O` levels and between CPUs. The setting applies to the code you compile, including the generics of other libraries that are instantiated in
+your program. The standard library is built with its own `ieee754: "2019"` and `fp-env: "default"` (in
+`std/djinn.proj`), so its compiled functions keep full IEEE semantics. Use `none` only when you know the data has
+no NaN or infinity.
 
 ## Target CPU and features
 
@@ -151,6 +153,56 @@ reported where they happen.
 `--runtime-lib` expects the release runtime that `tools/build_runtime.sh` builds. A sanitizer build of the
 runtime has to be built and linked by hand.
 
+## Setting the options in `djinn.proj`
+
+Everything in this page that is a compiler option can also live in the `compiler:` section of `djinn.proj`, so a
+build script and a plain `djinnc <project>` run produce the same program:
+
+```yaml
+compiler:
+  optimization: "O2"     # O0, O1, O2, O3, Os, Oz
+  cpu: "skylake"
+  features: "+avx2"
+  range-opt: false       # same as --no-range-opt
+  ieee754: "2019"
+  fp-env: "default"
+  harden: "standard"     # off, basic, standard, strict ("on" means standard)
+```
+
+A flag on the command line always wins over the project (`-O3`, `--cpu`, `--features`, `--no-range-opt`,
+`--ieee754`, `--fp-env`, `--harden=on|off`). An unknown optimization level or `harden` value stops the build with
+an error that names it.
+
+## Hardening
+
+Hardening is **on by default** (level `standard`) and never changes what a correct program does. Pick the level
+with `--harden=<level>` or `harden:` in `djinn.proj`; `on` is a shortcut for `standard`.
+
+| Level | What it adds |
+| --- | --- |
+| `off` | Nothing. For a benchmark, or a target where a protection does not link. |
+| `basic` | The link protections only (`relro`, `now`, `noexecstack`): no cost in the generated code. |
+| `standard` (default, `on`) | `basic` plus the stack protectors in Djinn code (`sspstrong`) and the runtime flags below. |
+| `strict` | `standard` plus a canary in **every** function (`sspreq`, `-fstack-protector-all`) and zero-initialized locals in the C runtime (`-ftrivial-auto-var-init=zero`). A little slower; zero-fill turns an uninitialized read into a 0 instead of garbage, which can hide that bug. |
+
+| Protection | Where | What it stops | Cost |
+| --- | --- | --- | --- |
+| `sspstrong` stack protector on every function | Djinn code, Linux and Android | A stack buffer overflow overwriting the return address: the canary changes and the program aborts | About 1–2%; frames with arrays or taken addresses only |
+| `-z relro -z now` | link, Linux and Android | Overwriting the GOT (the table of addresses of dynamic functions such as `printf`) to redirect a call | Slightly slower startup: all symbols resolve at load |
+| `-z noexecstack` | link, Linux and Android | Running injected code from the stack | None |
+| `-fstack-protector-strong -fstack-clash-protection` | C runtime, non-Windows | Same canary for the runtime; probes so a large frame cannot skip the guard page | About 1% |
+| `-D_FORTIFY_SOURCE=3` | C runtime, non-Windows | Overflow in `memcpy`, `snprintf` and similar when the size is known | Small; needs optimization |
+
+The runtime flags apply when `djinnc` compiles the runtime sources, and in `tools/build_runtime.sh` (set
+`DJINN_HARDEN=off|basic|standard|strict`, the same levels). Windows and WebAssembly do not get the stack protector: Windows links the CRT
+as a DLL and the web target has no stack to smash.
+
+`unsafe` blocks keep the protections: raw pointers are where overflows come from. Only behaviors that could
+change a correct program would be switched off there, and none is on today.
+
+Not done yet: control-flow integrity, CET/BTI markers, Windows CFG, shadow stacks and the sanitizers. The plan
+(including why CFG cannot cover the JIT) is in [issue #191](https://github.com/IDjinn/djinn/issues/191).
+
 ## Things that can surprise you
 
 | Behavior | Why | What to do |
@@ -163,10 +215,3 @@ runtime has to be built and linked by hand.
 | A check you expected is gone at `-O2` | Range analysis proved it unnecessary | `--verify-ranges` to confirm, `--no-range-opt` to keep it |
 | Windows binary has a `.pdb` and is large | The Windows link always uses debug options | Expected today |
 | A sanitizer does not see a coroutine frame bug | Freed frames stay on a free list | Build the runtime with the sanitizer or `-DDJINN_NO_FRAME_CACHE` |
-
-## Not done yet
-
-`djinnc` does not enable the platform hardening features by default. It does not add stack protectors
-(`-fstack-protector`), `_FORTIFY_SOURCE`, full RELRO (`-z relro -z now`), control-flow integrity or shadow
-stacks, and it does not mark JIT code for control-flow protection. Check the issue tracker for the plan
-(for example [the JIT and control-flow hardening issue](https://github.com/IDjinn/djinn/issues/191)).
