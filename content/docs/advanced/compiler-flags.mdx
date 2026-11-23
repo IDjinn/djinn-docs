@@ -1,0 +1,166 @@
+---
+title: Optimization & Build Flags
+---
+
+This page explains what `djinnc` does to make a program fast, which flags it passes to LLVM, clang and the linker,
+and what can surprise you. Everything here describes the compiler as it is today.
+
+## How a build works
+
+`djinnc` does not call `clang -O2` on your code. It builds LLVM IR itself, runs LLVM's optimization pipeline on
+it through the C API, and writes an object file. clang (or `lld` with `--lld`) is only used afterwards, to link
+that object with the runtime.
+
+| Stage | Done by | Controlled by |
+| --- | --- | --- |
+| Range analysis, async elision, constant evaluation | `djinnc` | `-O`, `--no-range-opt`, `--no-async-elision` |
+| IR optimization (inlining, loop and scalar passes) | LLVM pass pipeline | `-O0` … `-Oz` |
+| Machine code generation | LLVM backend | `-O`, `--cpu`, `--features`, `--target` |
+| Floating-point semantics | `djinnc` (IR) and LLVM | `--ieee754`, `--fp-env` |
+| Linking with the runtime | `clang`, `lld-link` or `ld.lld` | `--lld`, `--link-arg`, `-g`, `DJINN_*` variables |
+
+## Optimization levels
+
+The default is **`-O0`**: no optimization, fast compile, slow code. Pass a level for anything you measure or ship.
+
+| Level | IR pipeline | Backend | Use it for |
+| --- | --- | --- | --- |
+| `-O0` | `default<O0>` | none | debugging, quick edit/run cycles |
+| `-O1` | `default<O1>` | less | fast builds that still run reasonably |
+| `-O2` | `default<O2>` | default | normal release builds |
+| `-O3` | `default<O3>` | aggressive | hot numeric code; larger and slower to compile |
+| `-Os` | `default<O2>` plus `optsize` on every function | default | smaller code |
+| `-Oz` | `default<O2>` plus `minsize` on every function | default | smallest code |
+
+`-Os` and `-Oz` run the `-O2` pipeline and mark each function as size-sensitive, so LLVM's size heuristics
+(inlining and unrolling thresholds) apply. They are not the dedicated LLVM size pipelines, so the result can be
+larger than `clang -Oz` would give.
+
+### What optimization turns on in `djinnc`
+
+- **Range analysis.** With any `-O` above `-O0`, an overflow or division check that the compiler can prove
+  never fails is removed. It follows the possible values of each expression: `(i32)a + (i32)b` with two `u8`
+  cannot overflow, `(x & 255) * 3` cannot overflow, `n + 1` inside `if (n < 100 && n > -100)` cannot overflow,
+  `a / 7` cannot divide by zero, and the counter of a loop with constant bounds stays in range. When the range
+  is unknown (`a + b` of two arbitrary `i32`) the check stays. At `-O0` every check stays.
+  `--no-range-opt` keeps all the checks even when optimizing. `--verify-ranges` is the safety net: it
+  keeps the checks the analysis removed and stops with a report if one of them would have failed, which finds
+  a wrong proof.
+- **Async elision.** An `async` function that can never suspend is compiled as a plain function. See
+  [Async/await](/docs/async/async-await). `--no-async-elision` keeps every one as a coroutine.
+### Optimization does not change the language's behavior
+
+Plain integer arithmetic is checked (see [Numbers](/docs/types/numbers)). An optimized build keeps that check
+unless the range analysis proves it unnecessary, so a program that stops on overflow at `-O0` also stops at
+`-O3`. Use the `w` suffix when you want a wrapping operation with no check at all.
+
+### `--run` and `--tiered`
+
+`--run` compiles in memory and runs `main`. It uses the code generation level of `-O` (none by default, so
+startup stays fast). `--tiered` starts at tier 0 with no optimization and recompiles the hot functions at `-O1`
+and later `-O2` (or the `-O` level you gave) while the program runs. Both need the host target.
+
+## Floating point
+
+`--ieee754` and `--fp-env` decide what the optimizer may assume about floats. The default is IEEE 754-2019
+with round-to-nearest and no observable exception flags. See [IEEE 754](/docs/types/numbers#ieee-754) for the
+revisions and the strict environment.
+
+**`--ieee754=none` is not a normal optimization level.** It lets LLVM assume there are no NaN values and no
+infinities, ignore the sign of zero, reassociate operations and fuse `a * b + c` into one rounding, and it
+may flush subnormal numbers to zero. A comparison such as `x != x` or a check for infinity can be removed,
+and results can differ between `-O` levels and between CPUs. Today the setting applies to the whole program,
+including the standard library; use it only when you know the data has no NaN or infinity.
+
+## Target CPU and features
+
+| Option | Effect |
+| --- | --- |
+| (none) | A generic CPU for the target: the program runs on any machine of that architecture. |
+| `--cpu <name>` | Tune and enable the instructions of that CPU (for example `skylake`, `znver3`). |
+| `--cpu native` | The CPU and the feature list of the machine running `djinnc`. |
+| `--features +avx2,-avx512f` | Turn individual features on or off on top of the CPU. |
+
+`--cpu native` can produce instructions (AVX-512, for example) that other machines do not have, so the program
+may crash with an illegal instruction on them. Use it for programs you only run where you build them.
+
+`--run` and procedural macros run on the host: without `--cpu`, the in-process compiler uses the host CPU,
+while an ahead-of-time build uses the generic one. The two can differ in speed, and with `--ieee754=none`
+in results.
+
+## Debug information
+
+`-g` writes debug information, and is independent of `-O`: a `-O2 -g` build is optimized and has debug
+information. The web target also treats `-g` as a debug build (indented HTML, no long-lived caching of the
+runtime). `--tiered` does not support `-g`.
+
+On Windows the linker always receives debug options (`-g` for clang, `/debug` for `lld-link`), so a Windows
+executable carries a `.pdb` even without `-g`. With `/debug`, `lld-link` does not remove unreferenced code or
+merge identical functions by default, so Windows binaries are larger than the same build on Linux.
+
+## What the link step passes
+
+You can see and extend these with `--link-arg`.
+
+| Target | Tool | Flags `djinnc` adds |
+| --- | --- | --- |
+| Linux | `clang` | `-fuse-ld=lld -lm`, `-g` with `-g`; `-O2` only when it compiles the runtime sources (no `--runtime-lib`) |
+| Windows | `clang` | `-g`, `-fuse-ld=lld`, `-Wl,/defaultlib:legacy_stdio_definitions`, `/subsystem:windows,/entry:mainCRTStartup` with `--windowed` |
+| Windows with `--lld` | `lld-link` | `/subsystem:console` (or `windows` with `--windowed`), `/defaultlib:msvcrt`, `/defaultlib:legacy_stdio_definitions`, `/debug` |
+| Linux with `--lld` | `ld.lld` | `--eh-frame-hdr`, the C runtime start files, `-lc -lm` |
+| Android | NDK clang | `-lm -llog -landroid`; `-shared -Wl,-u,ANativeActivity_onCreate` for a `.so` |
+| WebAssembly | `wasm-ld` | `--no-entry --export=main --stack-first -z stack-size=1048576 --initial-memory=16777216 --gc-sections --fatal-warnings`, `--strip-debug` without `-g` |
+
+Object code is position independent except on Windows (the target default) and WebAssembly (static).
+
+The web runtime is compiled with `clang --target=wasm32-unknown-unknown -nostdlib -ffreestanding -fno-builtin -O2`.
+It always uses `-O2`, whatever level the program uses.
+
+## The runtime library
+
+The C runtime (scheduler, files, sockets, JSON, logger) is built by `tools/build_runtime.sh` with `-O2`. It
+uses `-std=c2x -fPIC` on Linux and Android and `-std=c17 -fms-runtime-lib=dll` on Windows. It is compiled
+for a generic CPU, so `--cpu` does not affect it. Without `--runtime-lib`, `djinnc` compiles the runtime sources
+together with your program at `-O2` using clang's default C standard.
+
+Because the runtime is a precompiled library of native objects, LLVM cannot inline its functions into your code:
+a call into the runtime is a real call.
+
+The runtime's own checks (`DJINN_ASSERT`) are always on, in every build. They are cheap, and removing them
+would give a different program in release and in debug.
+
+### Coroutine frames and memory sanitizers
+
+An `async` function that suspends is a coroutine, and its frame is allocated from the heap. The scheduler keeps
+up to 64 freed frames of each size class (64-byte steps, up to 2048 bytes) on free lists, so a program that
+starts many short tasks does not call `malloc` for each one.
+
+A frame on a free list is never returned to the allocator until the scheduler shuts down. That is fine for
+speed but it hides bugs from AddressSanitizer and valgrind: a use after free, a double free, a resume of a
+coroutine that was already destroyed, and an overflow of a few bytes past the frame (the block is rounded up to
+its class). When the runtime is compiled under AddressSanitizer, or with `-DDJINN_NO_FRAME_CACHE`, the cache is
+not compiled in and every frame goes straight to `malloc` and `free` with its exact size, so those bugs are
+reported where they happen.
+
+`--runtime-lib` expects the release runtime that `tools/build_runtime.sh` builds. A sanitizer build of the
+runtime has to be built and linked by hand.
+
+## Things that can surprise you
+
+| Behavior | Why | What to do |
+| --- | --- | --- |
+| The program is slow | The default is `-O0` | Pass `-O2` |
+| `-Oz` is bigger than expected | It is `-O2` plus a size attribute, not a size-specific pipeline | Compare with `-Os`; measure |
+| `NaN` or infinity checks disappear | `--ieee754=none` | Keep the default `2019` |
+| Results differ between `--run` and the compiled program | The JIT uses the host CPU; the ahead-of-time build uses a generic one | Pass the same `--cpu` to both, or none |
+| Illegal instruction on another machine | `--cpu native` | Use a named CPU or none |
+| A check you expected is gone at `-O2` | Range analysis proved it unnecessary | `--verify-ranges` to confirm, `--no-range-opt` to keep it |
+| Windows binary has a `.pdb` and is large | The Windows link always uses debug options | Expected today |
+| A sanitizer does not see a coroutine frame bug | Freed frames stay on a free list | Build the runtime with the sanitizer or `-DDJINN_NO_FRAME_CACHE` |
+
+## Not done yet
+
+`djinnc` does not enable the platform hardening features by default. It does not add stack protectors
+(`-fstack-protector`), `_FORTIFY_SOURCE`, full RELRO (`-z relro -z now`), control-flow integrity or shadow
+stacks, and it does not mark JIT code for control-flow protection. Check the issue tracker for the plan
+(for example [the JIT and control-flow hardening issue](https://github.com/IDjinn/djinn/issues/191)).
