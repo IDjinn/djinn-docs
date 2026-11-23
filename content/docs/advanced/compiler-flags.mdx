@@ -181,10 +181,12 @@ compiler:
   ieee754: "2019"
   fp-env: "default"
   harden: "standard"     # off, basic, standard, strict ("on" means standard)
+  gc-sections: true      # drop unused code and data at link time
+  sanitize: "undefined"  # address, undefined, thread (a comma list); off by default
 ```
 
 A flag on the command line always wins over the project (`-O3`, `--cpu`, `--features`, `--no-range-opt`,
-`--ieee754`, `--fp-env`, `--harden=on|off`). An unknown optimization level or `harden` value stops the build with
+`--ieee754`, `--fp-env`, `--harden=on|off`, `--gc-sections`, `--sanitize=<list>`). An unknown optimization level or `harden` value stops the build with
 an error that names it.
 
 ## Hardening
@@ -197,13 +199,17 @@ with `--harden=<level>` or `harden:` in `djinn.proj`; `on` is a shortcut for `st
 | `off` | Nothing. For a benchmark, or a target where a protection does not link. |
 | `basic` | The link protections only (`relro`, `now`, `noexecstack`): no cost in the generated code. |
 | `standard` (default, `on`) | `basic` plus the stack protectors in Djinn code (`sspstrong`) and the runtime flags below. |
-| `strict` | `standard` plus a canary in **every** function (`sspreq`, `-fstack-protector-all`) and zero-initialized locals in the C runtime (`-ftrivial-auto-var-init=zero`). A little slower; zero-fill turns an uninitialized read into a 0 instead of garbage, which can hide that bug. |
+| `strict` | `standard` plus a canary in **every** function (`sspreq`, `-fstack-protector-all`), zero-initialized locals in the C runtime (`-ftrivial-auto-var-init=zero`), Control Flow Guard on Windows and the shadow call stack on Android arm64. A little slower; zero-fill turns an uninitialized read into a 0 instead of garbage, which can hide that bug. |
 
 | Protection | Where | What it stops | Cost |
 | --- | --- | --- | --- |
 | `sspstrong` stack protector on every function | Djinn code, Linux (not Android yet: its guard lives in a TLS slot that needs per-architecture module flags) | A stack buffer overflow overwriting the return address: the canary changes and the program aborts | About 1–2%; frames with arrays or taken addresses only |
 | `-z relro -z now` | link, Linux and Android | Overwriting the GOT (the table of addresses of dynamic functions such as `printf`) to redirect a call | Slightly slower startup: all symbols resolve at load |
 | `-z noexecstack` | link, Linux and Android | Running injected code from the stack | None |
+| `-pie` | link, Linux and Android (not for `-shared`) | A fixed load address: ASLR moves the program too | Negligible on 64-bit |
+| `-fcf-protection=full` (x86-64) or `-mbranch-protection=standard` (arm64), and the matching module flags in Djinn code | Linux, Android, C runtime and Djinn code | Jumping into the middle of a function: Intel CET (`endbr64`) or ARM BTI/PAC markers on indirect-call targets | Under 1%; the markers are no-ops on CPUs without the feature |
+| Control Flow Guard (`cfguard` + `/guard:cf`) | Windows, `strict` only | An indirect call to an address that is not a function start | Small. Checked on this repo: the table has the functions and `--run` (the JIT) still works |
+| ShadowCallStack (`shadowcallstack`, `+reserve-x18`) | Android arm64, `strict` only | A return address overwritten on the stack: returns use a separate stack in `x18` | Small; reserves a register |
 | `-fstack-protector-strong -fstack-clash-protection` | C runtime, non-Windows | Same canary for the runtime; probes so a large frame cannot skip the guard page | About 1% |
 | `-D_FORTIFY_SOURCE=3` | C runtime, non-Windows | Overflow in `memcpy`, `snprintf` and similar when the size is known | Small; needs optimization |
 
@@ -214,8 +220,37 @@ as a DLL and the web target has no stack to smash.
 `unsafe` blocks keep the protections: raw pointers are where overflows come from. Only behaviors that could
 change a correct program would be switched off there, and none is on today.
 
-Not done yet: control-flow integrity, CET/BTI markers, Windows CFG, shadow stacks and the sanitizers. The plan
-(including why CFG cannot cover the JIT) is in [issue #191](https://github.com/IDjinn/djinn/issues/191).
+Code run by the JIT (`--run`, procedural macros) is not hardened: it is built differently from an
+ahead-of-time object. What was tested: all of this builds and runs on Windows x64 (CFG included). The Linux
+and Android paths (PIE, CET/BTI, ShadowCallStack) are written against the same flags `clang` uses but were not run
+on those systems yet. Plan and background: [issue #191](https://github.com/IDjinn/djinn/issues/191).
+
+## Sanitizers
+
+`--sanitize=address|undefined|thread` (a comma list; `address` and `thread` cannot be combined, `off` clears it)
+or `sanitize:` in `djinn.proj` instruments the program for debugging. It needs the `clang` driver to link, so it is
+not available for WebAssembly, Android or `--lld`.
+
+| Sanitizer | What it instruments | Notes |
+| --- | --- | --- |
+| `address` | Djinn code (an `asan` pass after the optimizer) and the runtime when it is compiled from source | Heap and stack overflows, use after free. The coroutine frame cache turns itself off. Not available on Windows: the sanitizer's `malloc` thunks clash with the dynamic UCRT the runtime links against |
+| `thread` | Djinn code (`tsan`) and the runtime when compiled from source | Data races. Not available on Windows |
+| `undefined` | The C runtime only | Djinn integer arithmetic is already checked, so there is nothing more to instrument in Djinn code |
+
+With `--runtime-lib` the prebuilt runtime is not instrumented, and `djinnc` warns: build it with
+`DJINN_SANITIZE=address tools/build_runtime.sh`. `_FORTIFY_SOURCE` is left out of a sanitized build because the
+checked `memcpy` and the sanitizer would report the same overflow twice. Only the object code is checked on Windows
+(`--emit-asm` shows the `__asan_*` calls); a run with the address sanitizer was not possible there.
+
+## Dropping unused code
+
+`--gc-sections` (or `gc-sections: true`) makes the link remove functions and data nothing refers to
+(`-Wl,--gc-sections` on Linux, `/opt:ref,icf` on Windows). It is off by default because a program that looks a symbol
+up by name at run time would lose it. The runtime is built with one section per function, so this also shrinks it.
+
+For the web target, `wasm-ld` now runs with `-O2` when the program is optimized, and the web runtime is compiled
+with `-Wall -Wextra` instead of `-w`. If `wasm-opt` is installed, set `DJINN_WASM_OPT` to its path and an optimized
+build is run through `wasm-opt -O2` as well.
 
 ## Things that can surprise you
 
