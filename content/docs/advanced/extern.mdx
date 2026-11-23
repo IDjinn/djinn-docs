@@ -96,3 +96,30 @@ i32 main() {
 ```
 
 See [Built-in Types](/docs/std/built-in-types) for the full standard library reference.
+
+## Native errors
+
+`[NativeError(detect = <condition on result>, capture = errno | last_error | return_code)]` on an extern function that
+declares `throws(E)` makes a failed call throw `E { .code = <captured> }`, so `try` and `switch` handle it like any
+Djinn error. `E` is a struct with an integer field `code`. `errno` is cleared before the call and read right after it;
+`last_error` is `GetLastError` on Windows (errno elsewhere); `return_code` uses the returned value.
+
+```djinn
+struct OsError {
+    i32 code;
+}
+
+extern "C" {
+    [NativeError(detect = result != 0, capture = errno)]
+    i32 remove(i8* path) throws(OsError);
+}
+
+unsafe i32 main() {
+    return switch remove("missing.txt") {
+        Result v -> 0,
+        OsError e -> e.code
+    };
+}
+```
+
+A malformed attribute (no `detect`, an unknown `capture`, no `throws`) is `E7012`.

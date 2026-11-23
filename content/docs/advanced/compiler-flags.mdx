@@ -252,6 +252,13 @@ For the web target, `wasm-ld` now runs with `-O2` when the program is optimized,
 with `-Wall -Wextra` instead of `-w`. If `wasm-opt` is installed, set `DJINN_WASM_OPT` to its path and an optimized
 build is run through `wasm-opt -O2` as well.
 
+## Contracts and obligations
+
+`--contracts=check|observe|ignore` (or `contracts:` in `djinn.proj`) decides what a failed `require`, `ensure` or
+`invariant` does: trap, report and go on, or nothing. A library keeps the mode it was built with. `--obligations`
+(`=json` for tools) lists the guarantees the compiler tracks and the effects it inferred. See
+[Contracts, Effects & Atomic Regions](./contracts).
+
 ## Things that can surprise you
 
 | Behavior | Why | What to do |

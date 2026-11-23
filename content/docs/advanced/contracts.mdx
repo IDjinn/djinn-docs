@@ -1,0 +1,141 @@
+---
+title: Contracts, Effects & Atomic Regions
+---
+
+Djinn checks what a function promises (contracts), infers what it does (effects), and can undo a half-done update
+when an error leaves a block (atomic regions). `--obligations` lists every guarantee the compiler tracks.
+
+## require, ensure and old
+
+Clauses come after the signature. `require` is checked on entry, `ensure` before every return: `result` is the
+returned value and `old(x)` the value `x` had on entry.
+
+```djinn
+struct Account {
+    mut i64 balance;
+
+    public void withdraw(i64 amount)
+        require(amount > 0)
+        require(amount <= this.balance)
+        ensure(this.balance == old(this.balance) - amount) {
+        this.balance = this.balance - amount;
+    }
+}
+```
+
+A failed clause stops the program with `R10013: contract violated: require(amount > 0)`. Rules:
+
+- `old(x)` copies `x` on entry, so `x` must be trivially copyable (a number, `bool`, pointer or struct of them, `E7001`).
+- A clause may only call functions without effects (`E7009`): checking must not change the program.
+- Returns inside a lambda are not the function's returns and are not checked.
+
+## invariant
+
+An invariant is declared in the struct body and checked when every method and constructor that is neither `static`
+nor `private` returns. Only the struct's own methods can write its `mut` fields or build it with an initializer
+(`E7002`), so code outside cannot break it unchecked: give the struct a constructor.
+
+```djinn
+struct Account {
+    mut i64 balance;
+    invariant(this.balance >= 0);
+
+    Account(i64 start) {
+        this.balance = start;
+    }
+
+    public void withdraw(i64 amount) {
+        this.balance = this.balance - amount;
+    }
+}
+```
+
+## Contract modes
+
+| Mode | A failed clause | Set with |
+|---|---|---|
+| `check` (default) | Traps with `R10013` | `--contracts=check` |
+| `observe` | Prints `observed: ...` to stderr and goes on | `--contracts=observe` |
+| `ignore` | Is not evaluated (and never becomes an assumption) | `--contracts=ignore` |
+
+`contracts: observe` in `djinn.proj` sets the project mode; the command line wins. **Each library keeps the mode it
+was built with**: a `.djlib` records it in its manifest (`djinnc --inspect-lib` shows `contracts:`), its compiled code
+uses it, and so do the bodies a consumer compiles again from its interface (generics). A project that checks its
+contracts is told when one of its libraries only observes or ignores them.
+
+## Effects
+
+The compiler infers what every function can do: `writes` (memory that is not one of its locals), `io` (the outside
+world: files, network, processes, tasks), `suspends` (`await`) and `unknown` (code it cannot see: extern functions
+without `[Effects]`, function values, interface calls). Standard C functions such as `strlen`, `memcpy` and `printf`
+are known.
+
+```djinn
+extern "C" {
+    [Effects(none)] i32 custom_hash(i8* text);
+}
+
+[Pure] i32 square(i32 x) {
+    return x * x;
+}
+
+[Effects(writes)] void reset(Counter* counter) {
+    counter.value = 0;
+}
+```
+
+- `[Pure]` and `[Const]` functions must have no effects (`E7003`).
+- `[Effects(...)]` declares the effects of an extern, and is an audited ceiling on a function with a body (`E7004`).
+- A library records the effects of the functions it compiles, so consumers do not count them as `unknown`.
+
+## Atomic regions
+
+`atomic(operands) { ... }` saves its operands (variables, fields, dereferences) when it starts. An error that leaves
+the region (`throw`, or a `try` that propagates) restores them; leaving it normally (its end, `return`, `break`,
+`continue`) commits and runs `after_commit`.
+
+```djinn
+unsafe i32 transfer(Account* from, Account* to, i64 amount) throws(InsufficientFunds, AuditUnavailable) {
+    atomic(*from, *to) {
+        if (from.balance < amount) {
+            throw InsufficientFunds();
+        }
+        from.balance = from.balance - amount;
+        try audit(amount);
+        to.balance = to.balance + amount;
+    } after_commit {
+        printf("committed %lld\n", amount);
+    }
+    return 0;
+}
+```
+
+The compiler checks the region once effects are known:
+
+| Rule | Why | Error |
+|---|---|---|
+| No `await`, no call that suspends or has unknown effects | Another task could see or change the half-done state, and the rollback would undo its work | `E7005` |
+| Nothing that can fail after the first `io` effect | The outside world cannot be rolled back | `E7006` |
+| A value operand that owns memory (a `string`, a disposable struct) is replaced whole | It is undone by move: the old value is kept, not copied | `E7007` |
+| Every write, and every pointer passed to a function that writes, lands in an operand or a local of the region | That is all a rollback restores | `E7008` |
+| An operand is a place known at compile time (not `items[i]`) | Its save is made on entry | `E7010` |
+| `after_commit` does not return, break out, fail or suspend | It runs while the region is being left | `E7011` |
+
+`cooperative { ... }` only applies the first rule: no other task runs in the middle of it.
+
+## Native errors
+
+`[NativeError]` turns the failure protocol of an `extern "C"` function into a Djinn error. See
+[Extern & FFI](./extern).
+
+## --obligations
+
+`djinnc --check --obligations` lists each clause with how it holds (`checked`, `observed`, `ignored`, `proved`,
+`enforced`) and the inferred effects of every function of the program; `--obligations=json` prints the same for tools
+and agents.
+
+```text
+bank.djinn:11:9: checked ensure in Account.withdraw: ensure(this.balance == old(this.balance) - amount)
+bank.djinn:20:5: enforced atomic in transfer: operands are restored when an error leaves the region
+bank.djinn:8:12: effects of Account.withdraw: writes
+```
