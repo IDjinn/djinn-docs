@@ -1,5 +1,5 @@
 ---
-title: Contracts, Effects & Atomic Regions
+title: Contracts, Effects, Atomic Regions & Units of Work
 ---
 
 Djinn checks what a function promises (contracts), infers what it does (effects), and can undo a half-done update
@@ -122,6 +122,66 @@ The compiler checks the region once effects are known:
 | `after_commit` does not return, break out, fail or suspend | It runs while the region is being left | `E7011` |
 
 `cooperative { ... }` only applies the first rule: no other task runs in the middle of it.
+
+## writes clause
+
+`writes(a, b.field)` after the signature lists the memory a function may change besides its own locals. The compiler
+audits the body, and every callee, against the list: a place is a name followed by its fields, a dereference does not
+appear, so `writes(*from)` covers `from.balance`. Getters and setters are audited like calls.
+
+| Rule | Error |
+|---|---|
+| A write outside the list | `E7013` |
+| A write the compiler cannot trace (a function value, an interface call, code without declared effects, a library function that writes a global) | `E7014` |
+
+The clause and the write summary cross a `.djlib`.
+
+## requires uow
+
+`requires uow` marks a function that only makes sense inside a region. Calling it outside `atomic` or `cooperative`,
+from a function that is not marked the same way, is `E7015`.
+
+## Units of work
+
+A `uow` declaration names the participants and the rules of a unit of work; a method binds it and keeps the code.
+
+```djinn
+uow Transfer {
+    Account* from;
+    Account* to;
+    i64 amount;
+
+    require(amount > 0)
+    ensure(from.balance + to.balance == old(from.balance) + old(to.balance))
+    writes(*from, *to)
+    access(exclusive from, exclusive to)
+    ordering(Account.id ascending)
+    isolation(serializable)
+}
+
+unsafe i32 transfer(Account* from, Account* to, i64 amount) throws(InsufficientFunds)
+    uow(Transfer) strategy cooperative
+{
+    from.balance = from.balance - amount;
+    if (from.balance < 0) {
+        throw InsufficientFunds();
+    }
+    to.balance = to.balance + amount;
+    return 0;
+}
+```
+
+The body runs as an `atomic` region over the `writes` operands, wrapped in the uow's `require` and `ensure`, and the
+`writes` list becomes the function's own clause. The method's parameters must have the participants' names and types.
+Only `strategy cooperative` exists for now. `access` and `ordering` are checked and generate no code: a participant
+the uow writes must be `exclusive`, and two uow declarations may not order the same keys in opposite ways.
+
+| Mistake | Error |
+|---|---|
+| Unknown or repeated uow, or a missing/misspelled participant | `E7016` |
+| A strategy other than `cooperative`, or an isolation it cannot sustain | `E7017` |
+| A participant that does not match a parameter | `E7018` |
+| A write without `exclusive` access, a malformed `access` or `ordering`, or orderings that conflict | `E7019` |
 
 ## Native errors
 
