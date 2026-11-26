@@ -69,6 +69,37 @@ import std::libc;         // printf, malloc, free, strlen
 import std::collections;  // array<T>, map<K,V>
 ```
 
+## Type Name Resolution
+
+Imports belong to the namespace: an `import` in one file counts for every file that declares the same namespace.
+
+An unqualified type name (struct, enum, union, interface or type alias) is looked up in the current namespace, then in each enclosing one. At every level:
+
+1. a type declared by that namespace wins, so your own types shadow imported and standard library types;
+2. otherwise the namespaces it imports are searched.
+
+When two or more imported namespaces declare the name, the compiler reports error `E3072` and names the candidates. The order of the imports never picks one.
+
+```djinn
+import a;                  // declares struct Item
+import b;                  // also declares struct Item
+
+i32 main() {
+    return Item.id();      // error[E3072]: 'Item' is ambiguous between 'a::Item' and 'b::Item'
+}
+```
+
+Qualify the name to choose:
+
+```djinn
+a::Item item = { .value = 1 };
+i32 id = b::Item.id();
+a::Color color = a::Color.Red;
+a::Shape shape = a::Shape::Dot();
+```
+
+A macro expansion resolves its names where the macro is used, so write qualified names in a macro that must not depend on the caller's imports.
+
 ## Qualified Access
 
 Use `::` to call functions from other namespaces:
