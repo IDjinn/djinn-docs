@@ -66,8 +66,9 @@ File b = a;         // a is moved, only b is disposed
 ```
 
 A local is moved when it initializes a variable, is assigned to a variable, a field or an index, is returned, is used as a
-field value in a struct initializer, or is passed by value to a function. Using it afterwards is error `E5001`. Assigning
-to it again re-initializes it.
+field value in a struct initializer or as the payload of a union variant, or is passed by value to a function, including
+when it is wrapped into an `optional<T>` parameter. Using it afterwards is error `E5001`. Assigning to it again
+re-initializes it.
 
 ### Explicit calls and moving out of places
 
@@ -77,6 +78,39 @@ to it again re-initializes it.
 A value that needs disposal cannot be moved out of a field, an element or a pointer (`Handle h = box.item;`,
 `consume(*p)`): its owner would dispose it again. This is error `E5008`. Read the field you need, restructure so the
 value is moved as a whole, or use `unsafe` code, where the check is off.
+
+### Unions
+
+A union (an enum with a payload, such as `optional<T>` or `result<T, E>`) never disposes what it holds. Disposal is the
+job of whoever takes the payload out.
+
+```djinn
+optional<File> open_log() {
+    File log = { .handle = open("log.txt") };
+    return optional::Value(log);   // log moves into the union, it is not closed here
+}
+
+void archive(File taken) { }       // owns its argument and closes it
+
+i32 main() {
+    optional<File> found = open_log();
+    if (found is Value file) { i32 handle = file.handle; }   // reading leaves the payload in found
+    if (found is Value taken) { archive(taken); }            // moves the payload out and consumes found
+    return 0;
+}
+```
+
+A name bound by `is` or by a `switch` arm refers to the payload. Reading it changes nothing. Moving it (passing it by
+value, storing it, returning it, putting it into another variant) hands the value to the new owner and moves what was
+matched with it:
+
+- a local becomes moved, so using it again is error `E5001` until it is assigned again. This also holds when the union
+  is nested in another one.
+- a field, an element or a pointer cannot be moved from, so it is error `E5008`.
+- a temporary (`if (open_log() is Value file)`) has no other owner, so nothing else happens.
+
+A payload that is never taken out is not disposed. To release it, move it into a local or pass it by value. The rule
+applies to payloads that need disposal; matching an `optional<i32>` or `optional<str>` consumes nothing.
 
 ### Initialization
 
@@ -129,6 +163,8 @@ string joined = owned + owned;   // operators borrow their operands
 
 - Passing through a property setter, an operator or an extern function does not move the value.
 - Temporaries that are never stored in a variable are not disposed.
+- A payload left inside a union is not disposed, even when the union is a local that goes out of scope.
+- A union copied whole out of a field, an element or a pointer is not tracked.
 - A value moved into a container, or into a field of an existing variable, is not tracked.
 - A field assigned through a raw pointer, or a field of a local declared without an initializer, does not dispose its
   previous value, and a local declared without an initializer is never disposed after only its fields were assigned.
