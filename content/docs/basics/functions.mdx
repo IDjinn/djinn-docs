@@ -61,10 +61,10 @@ i32 main() {
 }
 ```
 
-`main` can also be `async`:
+`main` can also be async, by returning `task<i32>` or `task<void>`:
 
 ```djinn
-async i32 main() {
+task<i32> main() {
     i32 val = await compute();
     return val;
 }

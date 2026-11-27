@@ -51,7 +51,7 @@ The async methods use the Djinn runtime's event loop for non-blocking I/O:
 ```djinn
 import std::sys;
 
-async void main() {
+task<void> main() {
     await Console.write("Enter your name: ");
     void* input = await Console.readLine();
     await Console.write("Hello, {0}!\n", (i8*)input);
