@@ -43,6 +43,14 @@ struct Point {
 Point p = Point(10, 20);
 ```
 
+Constructor arguments convert like function call arguments, with or without `new`: between numbers only a wider type of
+the same kind converts implicitly, and anything that could lose information needs an explicit cast (error `E3054`).
+
+```djinn
+i64 wide = 10;
+Point q = Point((i32)wide, 20);   // Point(wide, 20) is error E3054
+```
+
 ## Field Access
 
 Access fields with the dot operator:
