@@ -196,7 +196,7 @@ struct Outer<T> {
 }
 ```
 
-On a parameter with `where` bounds, a member that neither the bounds nor any type implementing all of them has is `E3073`:
+On a parameter with `where` bounds, a member that neither the bounds nor any type implementing all of them has is `E3074`:
 
 ```djinn
 interface Named {
@@ -204,7 +204,7 @@ interface Named {
 }
 
 i32 touch<T>(T value) where T : Named {
-    return value.size;       // E3073: no type implementing Named has 'size'
+    return value.size;       // E3074: no type implementing Named has 'size'
 }
 ```
 
