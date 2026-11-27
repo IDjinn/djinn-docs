@@ -84,7 +84,7 @@ i32 main() {
 }
 ```
 
-The argument converts like a function argument to `i64`: a narrower integer widens, while a pointer, float, string, struct, `bool` or `u64` is error `E3054`.
+The argument converts like a function argument to `i64`: a narrower signed integer widens, while a pointer, float, string, struct, `bool` or unsigned integer is error `E3054` (cast it with `(i64)`).
 
 ## Generic Enums
 
