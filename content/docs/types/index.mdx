@@ -177,6 +177,26 @@ i32 main() {
 
 A string literal converts to `str`, `string`, `i8*`, `ptr<i8>` or `void*`, and never to a pointer of another type. When both `str` and a pointer overload exist, `f("text")` picks `str`. A `str` or `string` does not decay to a pointer; call `.toCString()` to get a null-terminated copy.
 
+## Fallback with `??`
+
+`a ?? b` gives the value of `a`, or `b` when `a` is empty or `null`. The fallback converts like a function argument to the value type of the left side:
+
+```djinn
+i32 main() {
+    i64? stored = null;
+    i64? cached = null;
+    i32 narrow = 5;
+    i64 result = stored ?? cached ?? narrow;    // the i32 fallback widens to i64
+    i32? small = null;
+    i32 wrong = small ?? result;                // error E3054: an i64 does not narrow
+    return (i32)result;
+}
+```
+
+- A fallback of the same nullable type as the left side keeps the result nullable, so `a ?? b ?? 0` chains.
+- A narrowing or lossy conversion, a pointer given for a number, a number given for a pointer, a pointer of another type and a value of an unrelated type are error `E3054`.
+- A nullable pointer takes a pointer of the same element type, nullable or not, or `null`.
+
 ## Unsafe pointer operations
 
 Indexing a pointer (`p[i]`, read or write) is an unsafe operation: it needs an `unsafe` block or an `unsafe` function, otherwise error `E3052`. The compiler cannot check the bounds of a raw address, so it does not do it for you. Use `str`, `arr<T>` or `array<T>` for sequences in safe code.

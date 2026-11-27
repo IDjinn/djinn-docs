@@ -67,6 +67,25 @@ i32 main() {
 
 The same rules apply to generic unions such as `optional::Value` and `result::Ok`. When the type arguments are inferred from the payloads, the first one fixes the type: with `union Pair<T> { Both(T, T), None, }` and `i64 wide`, `Pair::Both(1, wide)` is an error, while `Pair<i64>::Both(1, wide)` compiles.
 
+## Looking up a variant by value
+
+`parseValue` returns the variant of a simple enum that has the given value, and the `Unknown` variant, which the enum must declare, when none has it:
+
+```djinn
+enum Code {
+    Unknown = 0,
+    Ready = 3
+}
+
+i32 main() {
+    i32 received = 3;
+    Code code = Code::parseValue(received);
+    return (i32)code;
+}
+```
+
+The argument converts like a function argument to `i64`: a narrower integer widens, while a pointer, float, string, struct, `bool` or `u64` is error `E3054`.
+
 ## Generic Enums
 
 Enums can be parameterized with generic types:
