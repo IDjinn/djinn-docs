@@ -29,6 +29,8 @@ export const intrinsics = {
   'atomic_and / atomic_or / atomic_xor (T* address, T value)': 'Atomic bitwise read-modify-write; returns the previous value. T must be an integer.',
   'atomic_cas(T* address, T expected, T desired)': 'Stores desired only when the value equals expected; returns whether it stored.',
   'atomic_fence()': 'Full memory barrier.',
+  'type_trait(T, trait)': 'A bool constant: whether T is an integer, signed, unsigned, float, number, bool, char, pointer, struct, enum, array or copyable type. For if constexpr in generic code.',
+  'same_type(A, B)': 'A bool constant: whether A and B are the same type.',
 }
 
 

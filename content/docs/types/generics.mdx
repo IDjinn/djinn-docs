@@ -215,3 +215,85 @@ i32 main() {
     return p.key + p.value;  // 15
 }
 ```
+
+## Constant Parameters
+
+A template parameter can stand for a constant, as non-type template parameters do in C++. An untyped parameter takes a
+type or a constant; a typed one (`i32 N`, `bool ON`, `Color C`) takes only a constant of that type.
+
+```djinn
+struct Array<T, N> {
+    T[N] data;          // an inline array: N values held in the struct itself
+}
+
+struct Ring<T, u8 CAPACITY> {
+    T[CAPACITY] items;
+    mut i32 count;
+}
+
+i32 main() {
+    Array<i32, 5> numbers = {};
+    Ring<f64, 8> recent = {};
+    return 0;
+}
+```
+
+A constant argument is a literal, a `constexpr` global, a struct constant or enum variant (`Flag<Color::Red>`), or a
+parenthesized constant expression, which may call `constexpr` functions:
+
+```djinn
+constexpr i64 cells(i64 n) {
+    return n * n;
+}
+
+struct Matrix<i32 N> {
+    i32[(cells(N))] data;   // Matrix<5> holds 25 values
+    i32[(N * 2)] edges;
+}
+```
+
+Inside an instance the parameter is its constant: it folds like a literal (`for (mut i32 i = 0; i < N; ...)`), sizes
+arrays and is passed on to other templates (`Holder<T, (N + 1)>`). Using it as a type is an error (E3074), so is giving
+a type to a typed parameter (E3075) or a value that does not fit it (E3073). The constant is inferred from the arguments
+of a generic function like a type is:
+
+```djinn
+i64 total<T, i32 N>(Array<T, N>* values) {
+    return N;
+}
+```
+
+`Name<args>.member(...)` calls a static member of an instance: `Array<i32, 4>.filled(0)`.
+
+### Inline arrays
+
+`T[N]` is an array held inside the value (a field, a local, a template argument), copied with it. It is built with `{}`
+(all zeros) or an array literal of exactly N values. Indexing is checked: a constant index outside the array is a
+compile error (E3057) and any other index is checked at run time (R10010, which the optimizer drops once the index is
+proven). An element can only be changed through a `mut` holder, and the elements must be trivially copyable (E3076 for
+`string[4]`: use `arr<T>` or a `List` for values that own memory).
+
+## Type Questions
+
+`if constexpr` checks only the branch it takes, so generic code can have one branch per kind of type. `std::types`
+answers the questions at compile time:
+
+```djinn
+import std::types;
+
+i32 describe<T>(T value) {
+    if constexpr is_integer<T>() {
+        return 1;
+    } else if constexpr is_float<T>() {
+        return 2;
+    } else {
+        return 3;
+    }
+}
+```
+
+The functions are `is_integer`, `is_signed`, `is_unsigned`, `is_float`, `is_number`, `is_bool`, `is_char`, `is_pointer`,
+`is_enum`, `is_struct`, `is_array`, `is_copyable` and `is_same<A, B>`; they wrap the intrinsics `type_trait(T, name)` and
+`same_type(A, B)`.
+
+Variadic templates (`Tuple<Types...>`) are not supported yet.

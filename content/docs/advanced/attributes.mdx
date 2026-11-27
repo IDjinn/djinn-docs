@@ -252,6 +252,8 @@ struct Math {
 | Attribute | Targets | Parameters | LLVM |
 |-----------|---------|------------|------|
 | `ForceInline` | Function, Method | - | `alwaysinline` |
+| `Target` | Function, Method | `i8* features` (`"avx2, fma"`) | `"target-features"`; a call from code without them needs `unsafe`, see [SIMD](/docs/std/simd#cpu-features) |
+| `Simd` | Function, Method | `i8* operation` | the body is generated as vector code (`std::simd`) |
 | `NoInline` | Function, Method | - | `noinline` |
 | `NoReturn` | Function, Method | - | `noreturn` |
 | `Hot` | Function, Method | - | `hot` |

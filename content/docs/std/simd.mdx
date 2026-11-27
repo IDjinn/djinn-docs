@@ -1,0 +1,83 @@
+---
+title: SIMD
+---
+
+## Overview
+
+`std::simd` holds `vector<T, N>`: N lanes of an integer or float type in one value, worked on lane by lane. It is an
+ordinary generic struct around an [inline array](/docs/types/generics#inline-arrays) (`T[N] lanes`), so a vector is a
+plain value, never allocated, and indexing it is bounds checked.
+
+```djinn
+import std::simd;
+
+i32 main() {
+    vector<u64, 4> a = vector<u64, 4>.of([1, 2, 3, 4]);
+    vector<u64, 4> b = vector<u64, 4>.splat(10);
+    vector<u64, 4> sum = a + b;                 // 11, 12, 13, 14
+    mask<4> big = sum.greater_than(b);          // all four
+    return (i32)sum.reduce_add() + big.count(); // 50 + 4
+}
+```
+
+On native targets every operation marked `[Simd]` is generated as LLVM vector code: SSE/AVX on x86, NEON on AArch64,
+SIMD128 on WebAssembly (with `--features +simd128`), and plain scalar code where the CPU has no SIMD. The Djinn body of
+each operation is its definition, and it is what the web (JavaScript) target runs, so the results are the same
+everywhere.
+
+## Semantics
+
+- Integer lanes wrap on overflow, as SIMD hardware does (`saturating_add` and `saturating_subtract` clamp instead).
+- Shift amounts are taken modulo the lane width.
+- Integer division by zero in a lane stops the program, as for scalars.
+- `convert<U>()` converts every lane like a cast; float lanes going to integers clamp at the limits of U on native targets.
+- `minimum` and `maximum` return the other lane when one is NaN.
+
+## Operations
+
+| Group | Operations |
+|---|---|
+| building | `splat`, `zero`, `of(T[N])`, `load(slice, offset)`, `unsafe load_unaligned(T*)` |
+| storing | `store(slice, offset)`, `unsafe store_unaligned(T*)`, `with_lane`, `[i]` |
+| arithmetic | `+ - * / %`, `negate`, `minimum`, `maximum`, `absolute`, `saturating_add`, `saturating_subtract`, `average_rounded`, `multiply_high`, `multiply_low32`, `fused_multiply_add`, `square_root`, `floor`, `ceiling`, `round`, `truncate` |
+| bits | `& \| ^`, `bitwise_not`, `shift_left`, `shift_right`, `population_count`, `leading_zeros`, `trailing_zeros`, `byte_swap` |
+| lanes | `swap_pairs`, `reverse`, `interleave_low`, `interleave_high`, `select(mask, otherwise)`, `convert<U>()`, `reinterpret<U, M>()` |
+| comparing | `equals`, `not_equals`, `less_than`, `less_or_equal`, `greater_than`, `greater_or_equal` (into `mask<N>`), `==` and `!=` (all lanes) |
+| reducing | `reduce_add`, `reduce_minimum`, `reduce_maximum`, `reduce_and`, `reduce_or`, `reduce_xor` |
+| builtins | `shuffle_bytes` (pshufb, tbl, swizzle) |
+
+`mask<N>` has `any`, `all`, `none`, `count`, `bits` (bit i is lane i), `invert`, `& | ^` and `[i]`.
+
+The operations that give another shape are generic functions of `Vectors`, so only the shapes a program uses exist:
+`concatenate(low, high)`, `low_half(v)`, `high_half(v)`, `multiply_add_adjacent(a, b)` (pmaddwd) and
+`sum_absolute_differences(a, b)` (psadbw).
+
+## CPU features
+
+A program is compiled for a baseline CPU (SSE2 on x86-64) unless `--cpu` or `--features` say more. A function can ask
+for more with `[Target("...")]`, and `Cpu` tells at run time whether the CPU has it:
+
+```djinn
+import std::simd;
+
+[Target("avx2")] u64 sum_avx2(vector<u64, 4> a, vector<u64, 4> b) {
+    return (a + b).reduce_add();
+}
+
+u64 sum(vector<u64, 4> a, vector<u64, 4> b) {
+    if (Cpu.has_avx2()) {
+        unsafe {
+            return sum_avx2(a, b);
+        }
+    }
+    return (a + b).reduce_add();
+}
+```
+
+Calling a `[Target]` function from code that does not have its features needs `unsafe` (E3052): on a CPU without them
+it would stop on an invalid instruction. Features of another architecture are ignored, so the same source builds for
+AArch64. `Cpu` has `features()`, `has(bits)` and `has_sse2`, `has_ssse3`, `has_sse41`, `has_sse42`, `has_avx`,
+`has_avx2`, `has_fma`, `has_avx512`, `has_neon`; on the web every answer is false.
+
+The text hash of `str` and `string` uses this: texts over 64 bytes run on two `vector<u64, 4>`, with AVX2 when the CPU
+has it.
