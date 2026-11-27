@@ -175,6 +175,47 @@ struct TypedBox<T> where T : IValue : IContainer {
 }
 ```
 
+## Checking at the Definition
+
+The body of a generic struct, `impl` block, function or method is checked where it is declared, even when nothing instantiates it.
+
+A member missing from a type that does not depend on the parameters is an error (`E3017` for a field, `E3027` for a method):
+
+```djinn
+struct Inner {
+    i32 value;
+}
+
+struct Outer<T> {
+    Inner inner;
+    T item;
+
+    void broken() {
+        this.inner.nope();   // E3027: Inner has no 'nope'
+    }
+}
+```
+
+On a parameter with `where` bounds, a member that neither the bounds nor any type implementing all of them has is `E3073`:
+
+```djinn
+interface Named {
+    i32 name_length();
+}
+
+i32 touch<T>(T value) where T : Named {
+    return value.size;       // E3073: no type implementing Named has 'size'
+}
+```
+
+A type implements a bound when it declares the interface or has a member of every name the interface requires. If one such type has the member, the body is accepted and each instance is checked with its own argument.
+
+A parameter without bounds accepts any member until the instance is checked.
+
+### In Libraries
+
+Building a library checks the generic bodies it declares: with such an error no `.djlib` is written. A program that uses the library does not check those bodies again at their declaration, only the instances it makes. The `where` bounds are kept in the library and apply to the type arguments of the program.
+
 ## Nested Generics
 
 Generic types can be nested as type arguments:
