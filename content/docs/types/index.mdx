@@ -162,6 +162,22 @@ A pointer converts implicitly only to a pointer of the same element type, to `vo
 
 A string literal converts to `str`, `string`, `i8*`, `ptr<i8>` or `void*`, and never to a pointer of another type. When both `str` and a pointer overload exist, `f("text")` picks `str`. A `str` or `string` does not decay to a pointer; call `.toCString()` to get a null-terminated copy.
 
+## Casting a pointer to `bool` or a number
+
+`(bool)p` compares the pointer with `null`: it is `true` for any address, nullable pointers (`T*?`) included. It is the same test as `if (p != null)`.
+
+A pointer cannot be cast to a floating-point type (`f16`, `bf16`, `f32` or `f64`): that is error `E3073`. To work with the address as a number, cast it to an integer first.
+
+```djinn
+f64 as_number(void* p) {
+    bool present = (bool)p;
+    if (!present) {
+        return 0.0;
+    }
+    return (f64)(u64)p;
+}
+```
+
 ## Unsafe pointer operations
 
 Indexing a pointer (`p[i]`, read or write) is an unsafe operation: it needs an `unsafe` block or an `unsafe` function, otherwise error `E3052`. The compiler cannot check the bounds of a raw address, so it does not do it for you. Use `str`, `arr<T>` or `array<T>` for sequences in safe code.
