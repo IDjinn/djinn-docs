@@ -60,12 +60,31 @@ i32 main() {
 }
 ```
 
-- A wider type of the same kind converts implicitly. A narrowing or lossy conversion, a number given as a pointer and a [pointer of another type](/docs/types#pointer-conversions) are error `E3054`.
+- A wider type of the same kind converts implicitly. A narrowing or lossy conversion, a number given as a pointer, a pointer given as a number and a [pointer of another type](/docs/types#pointer-conversions) are error `E3054`.
 - `null` or a nullable pointer given as `T*` is error `E3053`.
 - A struct given as a number or pointer, or the reverse, is error `E3024`.
 - A `str` or `string` given as an `i8*` payload, and a byte pointer given as a `str` or `string` payload, is converted.
 
 The same rules apply to generic unions such as `optional::Value` and `result::Ok`. When the type arguments are inferred from the payloads, the first one fixes the type: with `union Pair<T> { Both(T, T), None, }` and `i64 wide`, `Pair::Both(1, wide)` is an error, while `Pair<i64>::Both(1, wide)` compiles.
+
+## Looking up a variant by value
+
+`parseValue` returns the variant of a simple enum that has the given value, and the `Unknown` variant, which the enum must declare, when none has it:
+
+```djinn
+enum Code {
+    Unknown = 0,
+    Ready = 3
+}
+
+i32 main() {
+    i32 received = 3;
+    Code code = Code::parseValue(received);
+    return (i32)code;
+}
+```
+
+The argument converts like a function argument to `i64`: a narrower signed integer widens, while a pointer, float, string, struct, `bool` or unsigned integer is error `E3054` (cast it with `(i64)`).
 
 ## Generic Enums
 
