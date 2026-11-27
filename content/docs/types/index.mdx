@@ -160,6 +160,21 @@ void inspect(object obj) {
 
 A pointer converts implicitly only to a pointer of the same element type, to `void*`, or from `void*`. Any other `T*` to `U*` needs an explicit cast (error `E3054`).
 
+A pointer, including `null`, never converts to a number, `bool` or enum implicitly. Passed as a function, method or constructor argument or as a union variant payload it is error `E3054`; stored in a variable or field, returned or passed to a `fn` value it is error `E3053`. Cast it to an integer type to get the address, and compare it with `null` to get a `bool`:
+
+```djinn
+void log(i64 address) { }
+void report(bool found) { }
+
+i32 main() {
+    i32 value = 1;
+    i32* pointer = &value;
+    log((i64)pointer);          // log(pointer) is error E3054
+    report(pointer != null);    // report(pointer) is error E3054
+    return 0;
+}
+```
+
 A string literal converts to `str`, `string`, `i8*`, `ptr<i8>` or `void*`, and never to a pointer of another type. When both `str` and a pointer overload exist, `f("text")` picks `str`. A `str` or `string` does not decay to a pointer; call `.toCString()` to get a null-terminated copy.
 
 ## Unsafe pointer operations

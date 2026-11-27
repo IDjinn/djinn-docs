@@ -60,7 +60,7 @@ i32 main() {
 }
 ```
 
-- A wider type of the same kind converts implicitly. A narrowing or lossy conversion, a number given as a pointer and a [pointer of another type](/docs/types#pointer-conversions) are error `E3054`.
+- A wider type of the same kind converts implicitly. A narrowing or lossy conversion, a number given as a pointer, a pointer given as a number and a [pointer of another type](/docs/types#pointer-conversions) are error `E3054`.
 - `null` or a nullable pointer given as `T*` is error `E3053`.
 - A struct given as a number or pointer, or the reverse, is error `E3024`.
 - A `str` or `string` given as an `i8*` payload, and a byte pointer given as a `str` or `string` payload, is converted.
