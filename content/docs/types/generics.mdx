@@ -280,7 +280,9 @@ i32 main() {
 ```
 
 A constant argument is a literal, a `constexpr` global, a struct constant or enum variant (`Flag<Color::Red>`), or a
-parenthesized constant expression, which may call `constexpr` functions:
+parenthesized constant expression, which may call `constexpr` functions. In a call to a generic function a plain constant
+name goes after a type argument (`count<i32, LANES>()`) or in parentheses (`shade<(LANES)>()`), since `a < b` alone is a
+comparison:
 
 ```djinn
 constexpr i64 cells(i64 n) {
@@ -304,7 +306,8 @@ i64 total<T, i32 N>(Array<T, N>* values) {
 }
 ```
 
-`Name<args>.member(...)` calls a static member of an instance: `Array<i32, 4>.filled(0)`.
+`Name<args>.member(...)` calls a static member of an instance: `Array<i32, 4>.filled(0)`. A template that
+instantiates itself without end stops at 256 levels (E3084).
 
 ### Inline arrays
 
@@ -312,7 +315,8 @@ i64 total<T, i32 N>(Array<T, N>* values) {
 (all zeros) or an array literal of exactly N values. Indexing is checked: a constant index outside the array is a
 compile error (E3057) and any other index is checked at run time (R10010, which the optimizer drops once the index is
 proven). An element can only be changed through a `mut` holder, and the elements must be trivially copyable (E3081 for
-`string[4]`: use `arr<T>` or a `List` for values that own memory).
+`string[4]`: use `arr<T>` or a `List` for values that own memory). Because it is copied as a whole, one type holds at
+most 4096 values in inline arrays (E3081): larger buffers also belong in `arr<T>` or `List<T>`.
 
 ## Type Questions
 

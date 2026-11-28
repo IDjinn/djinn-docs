@@ -4,7 +4,8 @@ title: SIMD
 
 ## Overview
 
-`std::simd` holds `vector<T, N>`: N lanes of an integer or float type in one value, worked on lane by lane. It is an
+`std::simd` holds `vector<T, N>`: 1 to 64 lanes of an integer or float type in one value (E3085 for another shape),
+worked on lane by lane. It is an
 ordinary generic struct around an [inline array](/docs/types/generics#inline-arrays) (`T[N] lanes`), so a vector is a
 plain value, never allocated, and indexing it is bounds checked.
 
@@ -20,18 +21,23 @@ i32 main() {
 }
 ```
 
-On native targets every operation marked `[Simd]` is generated as LLVM vector code: SSE/AVX on x86, NEON on AArch64,
-SIMD128 on WebAssembly (with `--features +simd128`), and plain scalar code where the CPU has no SIMD. The Djinn body of
-each operation is its definition, and it is what the web (JavaScript) target runs, so the results are the same
-everywhere.
+Every operation marked `[Simd]` is generated as LLVM vector code: SSE/AVX on x86, NEON on AArch64, SIMD128 on
+WebAssembly (with `--features +simd128`), and plain scalar code where the CPU has no SIMD. The Djinn body of each
+operation is its definition: it runs where there is no vector form (16-bit float lanes) and gives the same results. The
+JavaScript target (`--target web`) has no `std::simd`; `--target wasm` does.
 
 ## Semantics
 
 - Integer lanes wrap on overflow, as SIMD hardware does (`saturating_add` and `saturating_subtract` clamp instead).
 - Shift amounts are taken modulo the lane width.
 - Integer division by zero in a lane stops the program, as for scalars.
-- `convert<U>()` converts every lane like a cast; float lanes going to integers clamp at the limits of U on native targets.
-- `minimum` and `maximum` return the other lane when one is NaN.
+- `convert<U>()` converts every lane and never stops the program: integer lanes wrap into a narrower U, float lanes
+  going to integers clamp at the limits of U (NaN becomes 0).
+- `minimum` and `maximum` return the other lane when one is NaN; of `0.0` and `-0.0` they take the argument's lane.
+- `floor`, `ceiling`, `round` and `truncate` keep the sign of a zero result (`ceiling` of `-0.5` is `-0.0`).
+- `shuffle_bytes` picks bytes within each group of 16 (`index & 15`); an index of 128 or more, or one past the last
+  lane, gives 0.
+- In a vector with an odd number of lanes, `swap_pairs` leaves the last one in place.
 
 ## Operations
 
@@ -77,7 +83,7 @@ u64 sum(vector<u64, 4> a, vector<u64, 4> b) {
 Calling a `[Target]` function from code that does not have its features needs `unsafe` (E3052): on a CPU without them
 it would stop on an invalid instruction. Features of another architecture are ignored, so the same source builds for
 AArch64. `Cpu` has `features()`, `has(bits)` and `has_sse2`, `has_ssse3`, `has_sse41`, `has_sse42`, `has_avx`,
-`has_avx2`, `has_fma`, `has_avx512`, `has_neon`; on the web every answer is false.
+`has_avx2`, `has_fma`, `has_avx512`, `has_neon`; on WebAssembly every answer is false.
 
 The text hash of `str` and `string` uses this: texts over 64 bytes run on two `vector<u64, 4>`, with AVX2 when the CPU
 has it.
