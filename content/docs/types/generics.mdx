@@ -294,8 +294,8 @@ struct Matrix<i32 N> {
 ```
 
 Inside an instance the parameter is its constant: it folds like a literal (`for (mut i32 i = 0; i < N; ...)`), sizes
-arrays and is passed on to other templates (`Holder<T, (N + 1)>`). Using it as a type is an error (E3076), so is giving
-a type to a typed parameter (E3077) or a value that does not fit it (E3075). The constant is inferred from the arguments
+arrays and is passed on to other templates (`Holder<T, (N + 1)>`). Using it as a type is an error (E3079), so is giving
+a type to a typed parameter (E3080) or a value that does not fit it (E3078). The constant is inferred from the arguments
 of a generic function like a type is:
 
 ```djinn
@@ -311,7 +311,7 @@ i64 total<T, i32 N>(Array<T, N>* values) {
 `T[N]` is an array held inside the value (a field, a local, a template argument), copied with it. It is built with `{}`
 (all zeros) or an array literal of exactly N values. Indexing is checked: a constant index outside the array is a
 compile error (E3057) and any other index is checked at run time (R10010, which the optimizer drops once the index is
-proven). An element can only be changed through a `mut` holder, and the elements must be trivially copyable (E3078 for
+proven). An element can only be changed through a `mut` holder, and the elements must be trivially copyable (E3081 for
 `string[4]`: use `arr<T>` or a `List` for values that own memory).
 
 ## Type Questions

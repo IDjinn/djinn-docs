@@ -142,15 +142,15 @@ Path parsed(str text) {
     return switch Path.parse(text) { Ok p -> p, Error e -> Path.unchecked("x", false) };
 }
 
-async i32 main() {
+task<i32> main() {
     result<Directory, FsError> opened = await Directory.open_root(parsed("."));
     return switch opened {
-        Ok root -> await save(&root),
+        Ok root -> await save(root),
         Error e -> 1
     };
 }
 
-async i32 save(Directory* root) {
+task<i32> save(Directory root) {
     result<bool, FsError> made = await root.create_dir_all(parsed("out"));
     result<bool, FsError> done = await root.write_atomic(parsed("out/report.txt"), "ready");
     return switch done { Ok v -> 0, Error e -> 2 };

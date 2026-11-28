@@ -7,15 +7,18 @@ import {Table} from '@/components/table';
 
 ## Overview
 
-Djinn supports `async` functions and `await` expressions for writing asynchronous code. Under the hood, async functions compile to LLVM coroutines that are
+Djinn supports async functions and `await` expressions for writing asynchronous code. Under the hood, async functions compile to LLVM coroutines that are
 fully optimized by the backend — in many cases resulting in **zero overhead** after inlining and coroutine elision.
 
 ```djinn
-async i32 compute(i32 x) {
+import std::sys;
+
+task<i32> compute(i32 x) {
+    await Task.delay(10);
     return x * 2 + 1;
 }
 
-async i32 main() {
+task<i32> main() {
     i32 result = await compute(10);
     printf("result: %d\n", result);  // result: 21
     return 0;
@@ -24,20 +27,55 @@ async i32 main() {
 
 ## Async Functions
 
-Any function can be marked `async` by adding the keyword before the return type. An async function returns a **coroutine handle** (`ptr`) instead of its declared return type.
+A function is async when its return type is written `task<T>` and its body uses `await`. Inside it, `return` takes a
+`T`; callers get the `task<T>`. A function that produces no value returns `task<void>`.
 
 ```djinn
-async i32 fetch_value() {
+task<i32> fetch_value() {
+    await Task.delay(10);
     return 42;
 }
 ```
 
-The caller uses `await` to obtain the actual return value.
+The `async` keyword is optional. It makes a function async even when it awaits nothing, and it does not replace the
+return type: `async task<i32> f()` is the same signature as `task<i32> f()`, while `async i32 f()` is error `E3075`.
 
-### Syntax
+<Table
+    columns={[
+        {header: 'Declaration', width: 'w-2/5'},
+        {header: 'Meaning'},
+    ]}
+    rows={[
+        {cells: [<code>{'task<i32> f() { ... await ... }'}</code>, 'Async. "return" takes an i32.']},
+        {cells: [<code>{'async task<i32> f() { ... }'}</code>, 'Async, with or without an await.']},
+        {cells: [<code>{'task<i32> f() { return g(); }'}</code>, 'Not async: it has no await, so it only passes on a task it got from elsewhere. Returning an i32 here is an error; add "async" to return a value.']},
+        {cells: [<code>{'sync i32 f() { ... }'}</code>, 'Never suspends. "await" is error E3061; ".sync" blocks on a task.']},
+        {cells: [<code>{'i32 f() { ... }'}</code>, 'A plain function. "await" is error E3076.']},
+    ]}
+/>
 
-```
-async <return_type> <name>(<params>) { <body> }
+### Errors
+
+The error type of a task comes from `throws`. `task<i32> load() throws(NotFound)` gives its callers a
+`task<i32, NotFound>`. Writing the second type argument is allowed only when it matches `throws`; otherwise it is error
+`E3077`.
+
+```djinn
+struct NotFound {
+    i32 id;
+}
+
+task<i32> load(i32 id) throws(NotFound) {
+    await Task.delay(10);
+    if (id < 0) {
+        throw NotFound { .id = id };
+    }
+    return id;
+}
+
+task<i32> main() {
+    return try await load(1) ?: 0;
+}
 ```
 
 ### Rules
@@ -48,40 +86,65 @@ async <return_type> <name>(<params>) { <body> }
         {header: 'Description'},
     ]}
     rows={[
-        {cells: ['Return type', 'Any type (i32, i64, void, structs, etc.). The actual LLVM return type becomes ptr (coroutine handle).']},
+        {cells: ['Return type', 'task<T> for any T (task<void> for none). The LLVM return type is ptr (the coroutine handle).']},
         {cells: ['Parameters', 'Same as regular functions. All parameter types are supported.']},
-        {cells: ['Body', 'Can contain any statement including other await expressions.']},
-        {cells: ['Async main', 'Supported. The compiler generates a wrapper main() that awaits the async entry point.']},
+        {cells: ['Contracts', 'In "ensure", "result" is the T of the task.']},
+        {cells: ['Interfaces', 'An interface declares the method as task<T>; an async method implements it.']},
+        {cells: ['Where await cannot appear', 'Constructors, properties, operators and lambdas.']},
+        {cells: ['main', 'task<i32> main() or task<void> main() is async, with or without an await.']},
     ]}
 />
 
 ## Await Expressions
 
-The `await` keyword suspends the caller until the async function completes, then extracts the return value from the coroutine promise.
+The `await` keyword suspends the caller until the async function completes, then extracts the return value from the
+coroutine promise. It is allowed only inside async functions.
 
 ```djinn
 i32 result = await some_async_function(args);
 ```
 
-### Where you can use await
+## Blocking wait: `.sync`
 
-- Inside `async` functions (chained coroutines)
-- Inside regular `main()` or any function (the compiler generates an await loop)
+Code that is not async waits for a task with the postfix `.sync`, which blocks the calling thread and runs the event
+loop until the task completes (C# `GetAwaiter().GetResult()`).
 
-### Multiple awaits
+```djinn
+i32 main() {
+    return compute(10).sync;
+}
+```
+
+Inside an async function `.sync` is warning `E6005`: use `await`. `sync` is not a reserved word, so a method may be
+called `sync()`.
+
+## `sync` functions
+
+The `sync` modifier states that a function never suspends. `await` inside it is error `E3061`.
+
+```djinn
+public sync i32 answer() {
+    return compute(10).sync;
+}
+```
+
+A `public` function that blocks on a task or holds async work has to say so in its signature, with `sync` or a
+`task<T>` result (error `E3063`): callers of a library see only that signature.
+
+## Multiple awaits
 
 You can await multiple async calls sequentially:
 
 ```djinn
-async i32 add(i32 a, i32 b) {
+async task<i32> add(i32 a, i32 b) {
     return a + b;
 }
 
-async i32 square(i32 x) {
+async task<i32> square(i32 x) {
     return x * x;
 }
 
-async i32 main() {
+task<i32> main() {
     i32 a = await square(3);    // 9
     i32 b = await square(4);    // 16
     i32 sum = await add(a, b);  // 25
@@ -94,16 +157,16 @@ async i32 main() {
 Async functions can call and await other async functions, creating chains of coroutines:
 
 ```djinn
-async i32 step1(i32 x) {
+async task<i32> step1(i32 x) {
     return x + 10;
 }
 
-async i32 step2(i32 x) {
+task<i32> step2(i32 x) {
     i32 val = await step1(x);
     return val * 2;
 }
 
-async i32 pipeline(i32 x) {
+task<i32> pipeline(i32 x) {
     i32 val = await step2(x);
     return val + 5;
 }
@@ -111,9 +174,27 @@ async i32 pipeline(i32 x) {
 // pipeline(5) -> step2(5) -> step1(5) = 15 -> 30 -> 35
 ```
 
+## Diagnostics
+
+<Table
+    columns={[
+        {header: 'Code', width: 'w-1/6'},
+        {header: 'Meaning'},
+    ]}
+    rows={[
+        {cells: ['E3061', '"await" in a "sync" function.']},
+        {cells: ['E3063', 'A public function that blocks on or holds async work declares neither "sync" nor task<T>.']},
+        {cells: ['E3075', 'An "async" function that does not return task<T>.']},
+        {cells: ['E3076', '"await" in a function that does not return task<T>.']},
+        {cells: ['E3077', 'The error type of a task does not come from "throws".']},
+        {cells: ['E6004', 'Warning: an async function never suspends and is compiled as a plain function.']},
+        {cells: ['E6005', 'Warning: ".sync" inside an async function.']},
+    ]}
+/>
+
 ## Async functions that never suspend
 
-An `async` function only needs a coroutine when it can actually suspend. The compiler checks every async function and
+An async function only needs a coroutine when it can actually suspend. The compiler checks every async function and
 compiles it as a plain synchronous function when its body has no suspension point:
 
 - no `std::builtin::coro.suspend()` or `coro.handle()`, and no runtime async I/O call (`Console`, `Socket`,
@@ -124,19 +205,19 @@ compiles it as a plain synchronous function when its body has no suspension poin
 
 `await f()` on a converted function becomes an ordinary call: no coroutine frame is allocated and the scheduler is not
 involved. The result and the errors of a `throws` function reach the caller exactly as through the task. The compiler
-reports warning `E6004` on the function, because `async` has no effect there:
+reports warning `E6004` on the function:
 
 ```djinn
-async i32 leaf(i32 x) {      // warning E6004: 'async' has no effect, compiled as a synchronous function
+async task<i32> leaf(i32 x) {  // warning E6004: never suspends, compiled as a synchronous function
     return x + 1;
 }
 
-async i32 middle(i32 x) {    // warning E6004: it only awaits 'leaf'
+task<i32> middle(i32 x) {      // warning E6004: it only awaits 'leaf'
     i32 value = await leaf(x);
     return value * 2;
 }
 
-async i32 waits(i32 x) {     // stays async: Task.delay suspends
+task<i32> waits(i32 x) {       // stays async: Task.delay suspends
     await Task.delay(10);
     return await leaf(x);    // a direct call
 }
@@ -152,7 +233,7 @@ A function keeps its coroutine, and gets no warning, when the task itself can be
     rows={[
         {cells: ['Recursion', 'A function that calls itself, directly or through other functions, keeps its frames on the heap. As a plain function each level would use the native stack, so a deep recursion could overflow it. Tail-recursive cycles are the exception, see below.']},
         {cells: ['The task is used', '`spawn f()`, storing `f()` in a `task<T>`, passing it along or taking a reference to the function all need the coroutine handle.']},
-        {cells: ['`async main`', 'The entry point is always driven by the event loop.']},
+        {cells: ['Async `main`', 'The entry point is always driven by the event loop.']},
         {cells: ['Libraries', 'A function compiled with `--library` keeps the task ABI, so `.djlib` consumers are unaffected.']},
         {cells: ['Instance methods, methods of reflected types, attributed functions, generics', 'They can be reached through reflection, interfaces or exported symbols, so the coroutine ABI is kept. Static methods of types that are not reflected are converted like free functions.']},
     ]}
@@ -177,21 +258,21 @@ stack. The whole cycle is converted or none of it, and only when all of these ho
 - the cycle has a base case: at least one `return` that does not continue into the cycle.
 
 ```djinn
-async bool is_even(i32 n) {   // converted together with is_odd, no warning
+task<bool> is_even(i32 n) {   // converted together with is_odd, no warning
     if (n == 0) {
         return true;
     }
     return await is_odd(n - 1);
 }
 
-async bool is_odd(i32 n) {
+task<bool> is_odd(i32 n) {
     if (n == 0) {
         return false;
     }
     return await is_even(n - 1);
 }
 
-async i32 depth(i32 n) {      // stays async: the await is not the last thing it does
+task<i32> depth(i32 n) {      // stays async: the await is not the last thing it does
     if (n == 0) {
         return 0;
     }
@@ -200,28 +281,29 @@ async i32 depth(i32 n) {      // stays async: the await is not the last thing it
 }
 ```
 
-A converted cycle gets no `E6004`: without `async` its calls would be plain recursion, with no guaranteed tail calls.
+A converted cycle gets no `E6004`: written as plain functions its calls would be ordinary recursion, with no guaranteed
+tail calls.
 The levels of a converted cycle do not appear in a panic's stack trace, since each tail call replaces its caller's
 frame. `is_even(1000000)` runs in about the time of a loop instead of allocating a million coroutine frames.
 
 Converting removes the scheduler round trip of each await, so a converted call runs to completion before any other
-ready task, while an await of a coroutine lets ready tasks (for example spawned ones) run first. In a synchronous
-function, an await of a converted function does not run the event loop either: tasks spawned earlier only run at the
-next await that really waits on a coroutine.
+ready task, while an await of a coroutine lets ready tasks (for example spawned ones) run first. A `.sync` on a
+converted function does not run the event loop either: tasks spawned earlier only run at the next wait on a real
+coroutine.
 
 The conversion does not depend on the optimization level: `-O0`, `-O2` and `--run` behave the same. Pass
 `--no-async-elision` to keep every `async` function a coroutine (no conversion and no `E6004`).
 
 ## Async Main
 
-When `main` is declared as `async`, the compiler automatically generates:
+When `main` is async, the compiler automatically generates:
 
 1. `__djinn_async_main()` — the actual coroutine with your code
 2. `main()` — a synchronous wrapper that calls and awaits the async entry point
 
 ```djinn
 // You write:
-async i32 main() {
+task<i32> main() {
     i32 val = await compute(10);
     return val;
 }
@@ -265,7 +347,7 @@ is no limit on how many coroutines wait at the same time.
 
 ## Implementation Details
 
-Each `async` function generates the following LLVM IR structure:
+Each async function generates the following LLVM IR structure:
 
 ```
 entry:
@@ -319,36 +401,14 @@ Functions are marked with the `presplitcoroutine` attribute so the LLVM coroutin
 
 ## task{'<T>'}
 
-The `task<T>` struct in `std::sys` represents a handle to an async coroutine. It wraps a raw coroutine handle and provides methods to check completion, resume execution, and retrieve results.
+`task<T, E>` is a core type, so it needs no import. It is the handle of an async computation that produces a `T` or
+fails with an `E`; `task<T>` is `task<T, void>`, a task that cannot fail. Await it, block on it with `.sync`, schedule
+it with `spawn`, or store it and pass it on.
 
 ```djinn
-import std::sys;
-
-struct task<T> {
-    void* handle;
-}
+task<i32> pending = compute(10);
+i32 value = await pending;
 ```
-
-### Constructor
-
-```djinn
-task<i32> t = task<i32>(some_handle);
-```
-
-### Methods
-
-<Table
-  columns={[
-    { header: 'Method', width: 'w-1/3' },
-    { header: 'Description' },
-  ]}
-  rows={[
-    { cells: [<code>is_completed() → bool</code>, 'Returns true if the coroutine has finished execution.'] },
-    { cells: [<code>resume()</code>, 'Resumes the suspended coroutine.'] },
-    { cells: [<code>get_result() → T</code>, 'Retrieves the return value from the completed coroutine promise.'] },
-    { cells: [<code>destroy()</code>, 'Destroys the coroutine frame and frees its memory.'] },
-  ]}
-/>
 
 ### Coroutine Primitives
 

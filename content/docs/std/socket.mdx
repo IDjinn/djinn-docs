@@ -59,7 +59,7 @@ Creates a new TCP socket. Asserts on failure.
 import std::net;
 import std::sys;
 
-async void main() {
+task<void> main() {
     Socket server = Socket();
     server.bind("0.0.0.0", 8080);
     server.listen(128);
@@ -79,7 +79,7 @@ async void main() {
 ```djinn
 import std::net;
 
-async void main() {
+task<void> main() {
     Socket sock = Socket();
     await sock.connect("127.0.0.1", 8080);
 
